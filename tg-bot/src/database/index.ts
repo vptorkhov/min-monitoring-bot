@@ -1,0 +1,1 @@
+export { dbClient, connectToDatabase } from '../config/database';
