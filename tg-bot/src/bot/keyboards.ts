@@ -10,34 +10,24 @@ export const Keyboards = {
     start: createReplyKeyboard({
         keyboard: [
             [{ text: '🚀 СТАРТ' }],
-            [{ text: '❓ Помощь' }, { text: 'ℹ️ Информация' }]
+            [{ text: '❓ Помощь' },]
         ],
         resize_keyboard: true,
         one_time_keyboard: false
     }),
     courierKeyboard: createReplyKeyboard({
         keyboard: [
-            [{ text: '🛴 Хочу взять СИМ' }, { text: '✅ Свободные средства' }],
-            [{ text: '⏹️ Завершить сессию' }, { text: '📱 Мой профиль' }],
-            [{ text: '❓ Помощь' }, { text: '🏠 Главная' }]
+            [{ text: '🛴 Хочу взять СИМ' }],
+            [{ text: '⏹️ Завершить сессию' }],
+            [{ text: '❓ Помощь' }]
         ],
         resize_keyboard: true
     }),
 
     afterTakeDevice: createReplyKeyboard({
         keyboard: [
-            [{ text: '⏹️ Завершить сессию' }, { text: '📱 Мой профиль' }],
-            [{ text: '✅ Свободные средства' }, { text: '❓ Помощь' }]
-        ],
-        resize_keyboard: true
-    }),
-
-    // Быстрый доступ после регистрации
-    quickAccess: createReplyKeyboard({
-        keyboard: [
-            [{ text: '🛴 Мои сессии' }, { text: '✅ Свободные средства' }],
-            [{ text: '📋 Все средства' }, { text: '⏹️ Завершить сессию' }],
-            [{ text: '❓ Помощь' }, { text: '👤 Мой профиль' }]
+            [{ text: '⏹️ Завершить сессию' }],
+            [{ text: '❓ Помощь' }]
         ],
         resize_keyboard: true
     }),
@@ -64,7 +54,7 @@ export const Keyboards = {
             [{ text: '🛴 Добавить СИМ' }, { text: '📋 Все СИМ' }],
             [{ text: '🛠️ Управление СИМ' }, { text: '👥 Курьеры' }],
             [{ text: '👥 Управление курьерами' }, { text: '📅 Активные сессии' }],
-            [{ text: '📅 История сессий' }, { text: '📊 Статистика' }]
+            [{ text: '📅 История сессий' },]
         ],
         resize_keyboard: true
     }),
@@ -74,7 +64,7 @@ export const Keyboards = {
         keyboard: [
             [{ text: '🛠️ Управление СИМ' }, { text: '📋 Все СИМ' }],
             [{ text: '🛴 Добавить СИМ' }, { text: '⚙️ Админ-панель' }],
-            [{ text: '❓ Помощь' }, { text: '🏠 Главная' }]
+            [{ text: '❓ Помощь' },]
         ],
         resize_keyboard: true
     }),

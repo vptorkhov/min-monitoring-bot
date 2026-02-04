@@ -51,12 +51,12 @@ export async function handleHelp(bot: TelegramBot, msg: TelegramBot.Message) {
 
     // Используем разные клавиатуры для админов и обычных пользователей
     const keyboard = isUserAdmin
-        ? Keyboards.quickAccess
+        ? Keyboards.adminPanel
         : Keyboards.start;
 
     try {
         const keyboard = isUserAdmin
-            ? Keyboards.quickAccess
+            ? Keyboards.adminPanel
             : Keyboards.start;
 
         await bot.sendMessage(chatId, helpText, {

@@ -26,6 +26,7 @@ import { courierManagementStateManager, handleCourierManagementMessage, handleMa
 import { handleActiveSessions, handleActiveSessionsButton } from './handlers/admin-sessions';
 import { handleSessionHistory, handleSessionHistoryButton, handleSessionHistoryMessage, sessionHistoryStateManager } from './handlers/admin-session-history';
 import { handleTakeDevice, handleTakeDeviceButton, handleTakeDeviceMessage, takeDeviceStateManager } from './handlers/user-take-device';
+import { handleEndSession } from './handlers/user-end-session';
 
 export function setupBotHandlers(bot: TelegramBot) {
     console.log('🔧 Настройка обработчиков бота...');
@@ -37,6 +38,7 @@ export function setupBotHandlers(bot: TelegramBot) {
     bot.onText(/\/admin/, (msg) => handleAdmin(bot, msg));
     bot.onText(/\/cancel/, (msg) => handleCancel(bot, msg));
     bot.onText(/\/takedevice/, (msg) => handleTakeDevice(bot, msg));
+    bot.onText(/\/endsession/, (msg) => handleEndSession(bot, msg));
 
     // Команды администратора
     bot.onText(/\/adddevice/, (msg) => handleAddDevice(bot, msg));
@@ -112,9 +114,8 @@ export function setupBotHandlers(bot: TelegramBot) {
             return;
         }
 
-        if (text === '⏹️ Завершить сессию') {
-            // TODO: добавим позже функцию завершения сессии
-            await bot.sendMessage(msg.chat.id, '⏹️ Функция завершения сессии будет добавлена позже.');
+        if (msg.text === '⏹️ Завершить сессию') {
+            await handleEndSession(bot, msg);
             return;
         }
 

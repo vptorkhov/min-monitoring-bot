@@ -257,7 +257,7 @@ export async function handleRegistrationMessage(bot: TelegramBot, msg: TelegramB
 
                 await bot.sendMessage(chatId, successText, {
                     parse_mode: 'Markdown',
-                    ...Keyboards.quickAccess
+                    ...Keyboards.courierKeyboard
                 });
 
                 // Удаляем состояние через 5 минут
