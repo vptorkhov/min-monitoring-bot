@@ -49,21 +49,30 @@ export async function getAvailableDevicesForUser(): Promise<Array<{
     id: number;
     device_number: string;
     device_type: string;
+    is_personal: boolean;
 }>> {
     try {
         const result = await dbClient.query(
             `SELECT 
                 md.id,
                 md.device_number,
-                md.device_type
+                md.device_type,
+                md.is_personal
              FROM mobility_devices md
-             WHERE md.is_active = TRUE 
-                AND md.is_personal = FALSE
-                AND NOT EXISTS (
-                    SELECT 1 FROM sessions s 
-                    WHERE s.device_id = md.id AND s.end_date IS NULL
-                )
-             ORDER BY md.device_number`
+             WHERE md.is_active = TRUE
+               AND (
+                    md.is_personal = TRUE
+                    OR (
+                        md.is_personal = FALSE
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM sessions s
+                            WHERE s.device_id = md.id
+                              AND s.end_date IS NULL
+                        )
+                    )
+               )
+             ORDER BY md.is_personal DESC, md.device_number`
         );
 
         return result.rows;
@@ -72,6 +81,7 @@ export async function getAvailableDevicesForUser(): Promise<Array<{
         return [];
     }
 }
+
 
 // Получаем информацию о курьере по Telegram ID
 export async function getCourierByTelegramId(telegramId: number) {
@@ -117,24 +127,38 @@ export async function createSession(courierId: number, deviceId: number): Promis
             };
         }
 
-        // Проверяем, что устройство все еще доступно
         const deviceCheck = await dbClient.query(
-            `SELECT 1 FROM mobility_devices md
-             WHERE md.id = $1 
-                AND md.is_active = TRUE
-                AND NOT EXISTS (
-                    SELECT 1 FROM sessions s 
-                    WHERE s.device_id = md.id AND s.end_date IS NULL
-                )`,
+            `SELECT md.is_personal
+     FROM mobility_devices md
+     WHERE md.id = $1
+       AND md.is_active = TRUE`,
             [deviceId]
         );
 
         if (deviceCheck.rows.length === 0) {
             return {
                 success: false,
-                message: '❌ Это средство уже занято или недоступно.\n' +
-                    'Пожалуйста, выберите другое средство.'
+                message: '❌ Средство недоступно.'
             };
+        }
+
+        const isPersonal = deviceCheck.rows[0].is_personal;
+
+        if (!isPersonal) {
+            const busyCheck = await dbClient.query(
+                `SELECT 1
+         FROM sessions
+         WHERE device_id = $1
+           AND end_date IS NULL`,
+                [deviceId]
+            );
+
+            if (busyCheck.rows.length > 0) {
+                return {
+                    success: false,
+                    message: '❌ Это средство уже занято.\nПожалуйста, выберите другое.'
+                };
+            }
         }
 
         // Создаем сессию
@@ -242,7 +266,11 @@ export async function handleTakeDevice(bot: TelegramBot, msg: TelegramBot.Messag
     devicesText += `📋 *Доступные средства (${availableDevices.length}):*\n\n`;
 
     availableDevices.forEach((device, index) => {
-        devicesText += `*${index + 1}. ${device.device_number}* - ${device.device_type}\n`;
+        const label = device.is_personal
+            ? '🛴 Личный СИМ'
+            : `${device.device_number} - ${device.device_type}`;
+
+        devicesText += `*${index + 1}. ${label}*\n`;
     });
 
     devicesText += `\n✏️ *Инструкция:*\n`;

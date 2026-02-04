@@ -64,33 +64,27 @@ export async function getSessionsByDate(date: Date): Promise<Array<{
         const endOfDay = new Date(date);
         endOfDay.setHours(23, 59, 59, 999);
 
+
         const result = await dbClient.query(
             `SELECT 
-                c.id as courier_id,
-                c.full_name as courier_full_name,
-                c.phone_number as courier_phone_number,
-                md.device_number,
-                md.device_type,
-                md.is_personal,
-                s.id as session_id,
-                s.start_date,
-                s.end_date,
-                s.end_date IS NULL as is_active
-             FROM sessions s
-             JOIN couriers c ON s.courier_id = c.id
-             JOIN mobility_devices md ON s.device_id = md.id
-             WHERE (
-                 -- Сессии, которые начались в этот день
-                 DATE(s.start_date) = DATE($1)
-                 OR 
-                 -- Сессии, которые закончились в этот день
-                 (s.end_date IS NOT NULL AND DATE(s.end_date) = DATE($1))
-                 OR
-                 -- Активные сессии, которые начались до этого дня и еще не закончились
-                 (s.end_date IS NULL AND s.start_date <= $2 AND ($3 IS NULL OR $3 >= $1))
-             )
-             ORDER BY s.start_date DESC`,
-            [date, endOfDay, startOfDay]
+        c.id as courier_id,
+        c.full_name as courier_full_name,
+        c.phone_number as courier_phone_number,
+        md.device_number,
+        md.device_type,
+        md.is_personal,
+        s.id as session_id,
+        s.start_date,
+        s.end_date,
+        s.end_date IS NULL as is_active
+     FROM sessions s
+     JOIN couriers c ON s.courier_id = c.id
+     JOIN mobility_devices md ON s.device_id = md.id
+     WHERE
+        s.start_date <= $2
+        AND (s.end_date IS NULL OR s.end_date >= $1)
+     ORDER BY s.start_date DESC`,
+            [startOfDay, endOfDay]
         );
 
         return result.rows;

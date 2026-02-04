@@ -61,3 +61,19 @@ export const DatabaseQueries = {
         }
     }
 };
+
+// Завершить сессию
+export const finishSessionQuery = `
+  UPDATE sessions
+  SET is_active = false,
+      ended_at = NOW()
+  WHERE id = $1
+  RETURNING device_id;
+`;
+
+// Активировать транспорт
+export const activateDeviceQuery = `
+  UPDATE devices
+  SET is_active = true
+  WHERE id = $1;
+`;
