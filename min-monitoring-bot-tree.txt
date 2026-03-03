@@ -1,0 +1,42 @@
+min-monitoring-bot
+├── db
+│   ├── docker-compose.yml
+│   ├── init.sql
+│   └── readme.md
+└── tg-bot
+    ├── .env
+    ├── .env.example
+    ├── .gitignore
+    ├── Dockerfile
+    ├── package-lock.json
+    ├── package.json
+    ├── src
+    │   ├── bot
+    │   │   ├── commands
+    │   │   │   ├── index.ts
+    │   │   │   └── start.ts
+    │   │   ├── handlers
+    │   │   │   └── registration.handler.ts
+    │   │   ├── index.ts
+    │   │   ├── init.ts
+    │   │   ├── keyboards
+    │   │   └── middlewares
+    │   │       ├── index.ts
+    │   │       └── registration-state.middleware.ts
+    │   ├── config
+    │   │   └── database.ts
+    │   ├── constants
+    │   │   ├── commands.constant.ts
+    │   │   └── states.constant.ts
+    │   ├── index.ts
+    │   ├── repositories
+    │   │   └── courier.repository.ts
+    │   ├── server
+    │   │   └── index.ts
+    │   ├── services
+    │   │   └── courier.service.ts
+    │   ├── utils
+    │   │   └── telegram.utils.ts
+    │   └── validators
+    │       └── phone.validator.ts
+    └── tsconfig.json

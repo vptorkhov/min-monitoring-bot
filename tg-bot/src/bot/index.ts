@@ -1,17 +1,36 @@
+// src/bot/index.ts
+
 import TelegramBot from 'node-telegram-bot-api';
-import { config } from '../config';
-import { setupBotHandlers } from './setup';
-import { setupErrorHandlers } from './errorHandlers';
+import dotenv from 'dotenv';
+import { initBot } from './init';
 
-export function createAndSetupBot(): TelegramBot {
-    console.log('🤖 Создание экземпляра бота...');
+dotenv.config();
 
-    const bot = new TelegramBot(config.BOT_TOKEN!, { polling: true });
+export default async function createAndSetupBot() {
+    console.log('🤖 Настройка Telegram бота...');
 
-    // Настраиваем обработчики
-    setupBotHandlers(bot);
-    setupErrorHandlers(bot);
+    const token = process.env.BOT_TOKEN;
+    if (!token) {
+        throw new Error('❌ Отсутствует BOT_TOKEN в .env файле');
+    }
 
-    console.log('✅ Бот создан и настроен');
-    return bot;
+    // Создание экземпляра бота с long polling
+    const bot = new TelegramBot(token, { polling: true });
+
+    // Базовое логирование ошибок
+    bot.on('polling_error', (error) => {
+        console.error('❌ Ошибка polling:', error);
+    });
+
+    bot.on('error', (error) => {
+        console.error('❌ Ошибка бота:', error);
+    });
+
+    // Инициализация всех компонентов бота (сервисы, обработчики, middleware, команды)
+    const { courierService, registrationHandler } = initBot(bot);
+
+    console.log('✅ Telegram бот успешно настроен и запущен');
+
+    // Возвращаем созданные экземпляры для возможного использования в других частях приложения
+    return { bot, courierService, registrationHandler };
 }

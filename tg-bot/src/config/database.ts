@@ -1,20 +1,106 @@
-import { Client } from 'pg';
-import { config } from './index';
+// src/config/database.ts
 
-export const dbClient = new Client({
-    host: config.DB_HOST,
-    port: config.DB_PORT,
-    database: config.DB_NAME,
-    user: config.DB_USER,
-    password: config.DB_PASSWORD,
-});
+import { Pool } from 'pg';
+import dotenv from 'dotenv';
 
-export async function connectToDatabase() {
-    try {
-        await dbClient.connect();
-        console.log('✅ Успешно подключено к базе данных PostgreSQL');
-    } catch (error) {
-        console.error('❌ Ошибка подключения к базе данных:', error);
-        process.exit(1);
+dotenv.config();
+
+// Конфигурация по умолчанию
+const DEFAULT_DB_HOST = 'localhost';
+const DEFAULT_DB_PORT = 5432;
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
+
+// Хранилище для пула (приватная переменная модуля)
+let pool: Pool | null = null;
+
+// Функция для задержки
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Инициализация подключения к базе данных
+ * Создает пул соединений и проверяет подключение
+ * Должна быть вызвана один раз при запуске приложения
+ */
+export async function initializeDatabase(): Promise<Pool> {
+    console.log('📦 Подключение к базе данных...');
+
+    // Если уже подключены, возвращаем существующий pool
+    if (pool) {
+        console.log('🔄 Используется существующее подключение к БД');
+        return pool;
+    }
+
+    // Чтение параметров из переменных окружения
+    const host = process.env.DB_HOST || DEFAULT_DB_HOST;
+    const port = parseInt(process.env.DB_PORT || String(DEFAULT_DB_PORT));
+    const user = process.env.DB_USER;
+    const password = process.env.DB_PASSWORD;
+    const database = process.env.DB_NAME;
+
+    // Проверка обязательных параметров
+    if (!user || !password || !database) {
+        throw new Error('❌ Отсутствуют обязательные параметры подключения к БД. Проверьте DB_USER, DB_PASSWORD, DB_NAME в .env файле');
+    }
+
+    // Создание пула соединений
+    const newPool = new Pool({
+        host,
+        port,
+        user,
+        password,
+        database,
+    });
+
+    // Попытки подключения с повторными попытками
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            console.log(`🔄 Попытка подключения к БД (${attempt}/${MAX_RETRIES})...`);
+
+            // Проверка соединения
+            const client = await newPool.connect();
+            const result = await client.query('SELECT 1 as connection_test');
+            client.release();
+
+            if (result.rows[0]?.connection_test === 1) {
+                console.log('✅ Подключение к базе данных успешно установлено');
+                pool = newPool; // Сохраняем пул в модуле
+                return pool;
+            }
+
+        } catch (error) {
+            console.error(`❌ Попытка ${attempt} не удалась:`, error instanceof Error ? error.message : error);
+
+            if (attempt < MAX_RETRIES) {
+                console.log(`⏳ Ожидание ${RETRY_DELAY_MS / 1000} секунд перед следующей попыткой...`);
+                await delay(RETRY_DELAY_MS);
+            }
+        }
+    }
+
+    throw new Error(`❌ Не удалось подключиться к БД после ${MAX_RETRIES} попыток`);
+}
+
+/**
+ * Получение пула соединений
+ * Должна вызываться только после initializeDatabase()
+ * @throws Error если база данных не инициализирована
+ */
+export function getDatabase(): Pool {
+    if (!pool) {
+        throw new Error('❌ База данных не инициализирована. Сначала вызовите initializeDatabase()');
+    }
+    return pool;
+}
+
+/**
+ * Закрытие всех соединений с базой данных
+ * Полезно для graceful shutdown
+ */
+export async function closeDatabase(): Promise<void> {
+    if (pool) {
+        await pool.end();
+        pool = null;
+        console.log('📦 Соединения с БД закрыты');
     }
 }

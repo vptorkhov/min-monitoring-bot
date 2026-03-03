@@ -54,11 +54,12 @@ CREATE INDEX idx_warehouse_is_active ON warehouse(is_active);
 -- Таблица для хранения информации о курьерах
 CREATE TABLE IF NOT EXISTS couriers (
     id SERIAL PRIMARY KEY,
+    telegram_id BIGINT UNIQUE,
     full_name VARCHAR(255) NOT NULL,
     nickname VARCHAR(100) UNIQUE,
     phone_number VARCHAR(20) UNIQUE NOT NULL,
     warehouse_id INTEGER,
-    is_active BOOLEAN DEFAULT TRUE,
+    is_active BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_courier_warehouse FOREIGN KEY (warehouse_id) 
@@ -75,6 +76,7 @@ COMMENT ON COLUMN couriers.warehouse_id IS 'ID склада, к которому
 COMMENT ON COLUMN couriers.is_active IS 'Активен ли курьер';
 COMMENT ON COLUMN couriers.created_at IS 'Дата создания записи';
 COMMENT ON COLUMN couriers.updated_at IS 'Дата последнего обновления';
+COMMENT ON COLUMN couriers.telegram_id IS 'ID пользователя в Telegram';
 
 -- Индексы для оптимизации запросов
 CREATE INDEX idx_couriers_warehouse_id ON couriers(warehouse_id);
