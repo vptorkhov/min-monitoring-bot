@@ -1,30 +1,86 @@
 # База данных для управления средствами индивидуальной мобильности
 
-## Структура базы данных
+Описание и схема находятся в скрипте `init.sql`. Ниже краткая документация по таблицам и основным полям.
 
-### Таблицы:
+## Таблицы
 
-1. **mobility_devices** - Средства индивидуальной мобильности
-   - `device_type` - тип средства (электросамокат и т.д.)
-   - `device_number` - идентификационный номер (например, РЕ026Р) или "personal"
-   - `is_personal` - является ли личным средством курьера
-   - `is_active` - активна ли запись (false для исключения из списков)
+### `mobility_devices` — Средства индивидуальной мобильности
 
-2. **couriers** - Курьеры
-   - `full_name` - ФИО
-   - `nickname` - уникальный псевдоним
-   - `phone_number` - номер телефона
+- **id** SERIAL PRIMARY KEY
+- **device_number** VARCHAR(20) — номер устройства (может быть пустым)
+- **is_personal** BOOLEAN NOT NULL — признак личного устройства
+- **status** VARCHAR(20) — текущий статус
+- **status_comment** TEXT — подробное описание статуса
+- **warehouse_id** INTEGER — внешний ключ на `warehouse(id)`, ON DELETE SET NULL
+- **is_active** BOOLEAN NOT NULL DEFAULT true — активность записи
+- **created_at** TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+- **updated_at** TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
-3. **sessions** - Сессии
-   - `courier_id` - ссылка на курьера
-   - `device_id` - ссылка на использованное средство
-   - `start_date` - дата начала
-   - `end_date` - дата окончания (NULL для активной сессии)
+При инициализации добавляется устройство с `device_number = 'ЛИЧНЫЙ'`.
+
+Индексы:
+
+- `idx_mobility_devices_status` (status)
+- `idx_mobility_devices_is_active` (is_active)
+- `idx_mobility_devices_is_personal` (is_personal)
+
+### `warehouse` — Склады
+
+- **id** SERIAL PRIMARY KEY
+- **name** VARCHAR(100) NOT NULL
+- **address** VARCHAR(200)
+- **is_active** BOOLEAN NOT NULL DEFAULT true
+- **created_at** TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+- **updated_at** TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+Индексы: `idx_warehouse_name`, `idx_warehouse_is_active`.
+
+### `couriers` — Курьеры
+
+- **id** SERIAL PRIMARY KEY
+- **telegram_id** BIGINT UNIQUE
+- **full_name** VARCHAR(255) NOT NULL
+- **nickname** VARCHAR(100) UNIQUE
+- **phone_number** VARCHAR(20) UNIQUE NOT NULL
+- **warehouse_id** INTEGER REFERENCES warehouse(id) ON DELETE SET NULL
+- **is_active** BOOLEAN DEFAULT FALSE
+- **created_at**, **updated_at** TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+Индексы: `idx_couriers_warehouse_id`, `idx_couriers_phone_number`, `idx_couriers_is_active`, `idx_couriers_nickname`.
+
+### `session` — Курьерские сессии
+
+- **id** SERIAL PRIMARY KEY
+- **courier_id** INTEGER NOT NULL REFERENCES couriers(id) ON DELETE RESTRICT
+- **device_id** INTEGER NOT NULL REFERENCES mobility_devices(id) ON DELETE RESTRICT
+- **warehouse_id** INTEGER NOT NULL REFERENCES warehouse(id) ON DELETE RESTRICT
+- **start_date** TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+- **end_date** TIMESTAMP
+- **is_active** BOOLEAN GENERATED ALWAYS AS (end_date IS NULL) STORED
+
+Индексы: `idx_session_courier_id`, `idx_session_device_id`, `idx_session_warehouse_id`, `idx_session_dates`, `idx_session_is_active`, а также частичный `idx_session_active_courier` для активных сессий по курьеру.
+
+### `admins` — Администраторы системы
+
+- **id** SERIAL PRIMARY KEY
+- **nickname** VARCHAR(50) NOT NULL UNIQUE
+- **password_hash** VARCHAR(200) NOT NULL
+- **permissions_level** INTEGER DEFAULT 1 (1 — обычный, 2 — суперадмин)
+- **is_login** BOOLEAN DEFAULT FALSE
+- **created_at** TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+После инициализации создаётся суперадмин `superadmin` с предустановленным хешем пароля.
 
 ## Запуск
 
 1. Убедитесь, что у вас установлены Docker и Docker Compose
-2. Дайте права на выполнение скрипта запуска:
-   ```bash
-   chmod +x start.sh
-   ```
+2. Перейдите в папку `db` и выполните:
+
+    ```bash
+    docker-compose up -d
+    ```
+
+3. Для остановки и удаления контейнера:
+    ```bash
+    docker-compose down -v
+    ```
