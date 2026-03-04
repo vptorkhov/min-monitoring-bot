@@ -175,14 +175,9 @@ export class RegistrationHandler {
     /**
      * Отмена регистрации
      */
-    async cancelRegistration(chatId: number, userId: number) {
+    async cancelRegistration(_chatId: number, userId: number) {
         registrationStates.delete(userId);
         registrationTempData.delete(userId);
-
-        await this.bot.sendMessage(
-            chatId,
-            '❌ Регистрация отменена. Чтобы начать заново, отправьте команду /start'
-        );
     }
 
     /**

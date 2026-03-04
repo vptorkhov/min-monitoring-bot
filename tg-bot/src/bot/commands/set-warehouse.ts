@@ -4,6 +4,7 @@ import { WarehouseService } from '../../services/warehouse.service';
 import { getUserState, setUserState, resetUserState, getUserTempData, setUserTempData, resetUserTempData } from '../middlewares/user-state';
 import { WarehouseState } from '../../constants/states.constant';
 import { Warehouse } from '../../repositories/types/warehouse.type';
+import { isCommand } from '../../constants/commands.constant';
 
 /**
  * Команда /set_warehouse
@@ -62,7 +63,11 @@ export function registerSetWarehouseCommand(
         if (state !== WarehouseState.SELECTING_WAREHOUSE) return;
 
         const text = msg.text?.trim();
-        if (!text || !/^\d+$/.test(text)) {
+        if (!text || isCommand(text)) {
+            return; // любое сообщение, которое является командой, игнорируем здесь
+        }
+
+        if (!/^\d+$/.test(text)) {
             await bot.sendMessage(chatId, '❌ Пожалуйста, введите корректный номер склада из списка выше.');
             return;
         }

@@ -9,6 +9,7 @@ import { registerSetWarehouseCommand } from './set-warehouse';
 import { WarehouseService } from '../../services/warehouse.service';
 import { WarehouseRepository } from '../../repositories/warehouse.repository';
 import { getDatabase } from '../../config/database';
+import { registerCancelCommand } from './cancel';
 
 /**
  * Регистрация всех команд бота
@@ -25,6 +26,8 @@ export function registerAllCommands(
 
     // Регистрируем только существующие команды
     registerStartCommand(bot, courierService, registrationHandler);
+    // Регистрируем команду /cancel
+    registerCancelCommand(bot, registrationHandler);
     // Создаём репозиторий и сервис складов
     const warehouseRepository = new WarehouseRepository();
     const warehouseService = new WarehouseService(warehouseRepository);
@@ -36,8 +39,8 @@ export function registerAllCommands(
     // Включаем только реально существующие команды
     bot.setMyCommands([
         { command: 'start', description: '🚀 Начать работу с ботом' },
-        { command: 'set_warehouse', description: '🏭 Выбрать склад' }
-        // TODO: добавить /cancel когда будет реализован
+        { command: 'set_warehouse', description: '🏭 Выбрать склад' },
+        { command: 'cancel', description: '❌ Отменить текущее действие' }
         // TODO: добавить /help когда будет реализован
     ]).then(() => {
         console.log('✅ Меню команд обновлено');
