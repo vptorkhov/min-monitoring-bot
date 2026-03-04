@@ -1,7 +1,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { CourierService } from '../../services/courier.service';
 import { WarehouseService } from '../../services/warehouse.service';
-import { getUserState, setUserState, resetUserState, getUserTempData, setUserTempData, resetUserTempData } from '../middlewares/user-state';
+import { stateManager } from '../state-manager';
 import { WarehouseState } from '../../constants/states.constant';
 import { Warehouse } from '../../repositories/types/warehouse.type';
 import { isCommand } from '../../constants/commands.constant';
@@ -46,11 +46,9 @@ export function registerSetWarehouseCommand(
 
         await bot.sendMessage(chatId, `Введите порядковый номер склада для прикрепления:\n\n${warehouseList}`);
 
-        // Сохраняем временное состояние пользователя
-        setUserState(telegramId, WarehouseState.SELECTING_WAREHOUSE);
-
-        // Сохраняем список складов для проверки выбора
-        setUserTempData(telegramId, warehouses);
+        // Сохраняем состояние и список складов пользователя
+        stateManager.setUserState(telegramId, WarehouseState.SELECTING_WAREHOUSE);
+        stateManager.setUserTempData(telegramId, { warehouses });
     });
 
     // Шаг 2: обработка текстового ввода пользователя при выборе склада
@@ -59,7 +57,7 @@ export function registerSetWarehouseCommand(
         const telegramId = msg.from?.id;
         if (!telegramId) return;
 
-        const state = getUserState(telegramId);
+        const state = stateManager.getUserState(telegramId);
         if (state !== WarehouseState.SELECTING_WAREHOUSE) return;
 
         const text = msg.text?.trim();
@@ -74,11 +72,12 @@ export function registerSetWarehouseCommand(
 
         const index = parseInt(text, 10) - 1;
 
-        const warehouses = getUserTempData<Warehouse[]>(telegramId);
+        const tempData = stateManager.getUserTempData<{ warehouses: Warehouse[] }>(telegramId);
+        const warehouses = tempData?.warehouses;
+
         if (!warehouses) {
             await bot.sendMessage(chatId, '❌ Произошла ошибка, попробуйте заново командой /set_warehouse.');
-            resetUserState(telegramId);
-            resetUserTempData(telegramId);
+            stateManager.clearUser(telegramId);
             return;
         }
 
@@ -97,8 +96,7 @@ export function registerSetWarehouseCommand(
             await bot.sendMessage(chatId, `✅ Вы успешно прикрепились к складу: ${selectedWarehouse.name}`);
         }
 
-        // Сбрасываем состояние и временные данные
-        resetUserState(telegramId);
-        resetUserTempData(telegramId);
+        // Очищаем состояние и данные пользователя
+        stateManager.clearUser(telegramId);
     });
 }

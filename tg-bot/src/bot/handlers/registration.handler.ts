@@ -2,19 +2,10 @@
 
 import TelegramBot from 'node-telegram-bot-api';
 import { CourierService } from '../../services/courier.service';
-import { RegistrationState, RegistrationStateType } from '../../constants/states.constant';
+import { RegistrationState } from '../../constants/states.constant';
 import { isCommand } from '../../constants/commands.constant';
 import { formatErrorMessage, formatSuccessMessage } from '../../utils/telegram.utils';
-
-
-// Хранилище состояний регистрации в памяти.
-const registrationStates = new Map<number, RegistrationStateType>();
-
-/**
- * Временное хранилище для данных регистрации (имя пользователя).
- * Данные удаляются после успешной регистрации или отмены.
- */
-const registrationTempData = new Map<number, { fullName?: string }>();
+import { stateManager } from '../state-manager';
 
 export class RegistrationHandler {
     constructor(
@@ -29,7 +20,7 @@ export class RegistrationHandler {
      */
     async startRegistration(chatId: number, userId: number) {
         // Устанавливаем состояние "ожидание имени"
-        registrationStates.set(userId, RegistrationState.AWAITING_NAME);
+        stateManager.setUserState(userId, RegistrationState.AWAITING_NAME);
 
         await this.bot.sendMessage(
             chatId,
@@ -58,7 +49,7 @@ export class RegistrationHandler {
             return;
         }
 
-        const currentState = registrationStates.get(userId);
+        const currentState = stateManager.getUserState(userId);
 
         if (!currentState || currentState === RegistrationState.IDLE) {
             return;
@@ -75,8 +66,7 @@ export class RegistrationHandler {
                 break;
 
             default:
-                registrationStates.delete(userId);
-                registrationTempData.delete(userId);
+                stateManager.clearUser(userId);
                 await this.startRegistration(chatId, userId);
         }
     }
@@ -105,11 +95,8 @@ export class RegistrationHandler {
             return;
         }
 
-        const tempData = registrationTempData.get(userId) || {};
-        tempData.fullName = trimmedName;
-        registrationTempData.set(userId, tempData);
-
-        registrationStates.set(userId, RegistrationState.AWAITING_PHONE);
+        stateManager.setUserTempDataField(userId, 'fullName', trimmedName);
+        stateManager.setUserState(userId, RegistrationState.AWAITING_PHONE);
 
         await this.bot.sendMessage(
             chatId,
@@ -133,11 +120,10 @@ export class RegistrationHandler {
             return;
         }
 
-        const tempData = registrationTempData.get(userId);
+        const tempData = stateManager.getUserTempData<{ fullName?: string }>(userId);
 
         if (!tempData?.fullName) {
-            registrationStates.delete(userId);
-            registrationTempData.delete(userId);
+            stateManager.clearUser(userId);
             await this.startRegistration(chatId, userId);
             return;
         }
@@ -153,8 +139,7 @@ export class RegistrationHandler {
         });
 
         if (result.success) {
-            registrationStates.delete(userId);
-            registrationTempData.delete(userId);
+            stateManager.clearUser(userId);
 
             await this.bot.sendMessage(
                 chatId,
@@ -176,15 +161,20 @@ export class RegistrationHandler {
      * Отмена регистрации
      */
     async cancelRegistration(_chatId: number, userId: number) {
-        registrationStates.delete(userId);
-        registrationTempData.delete(userId);
+        stateManager.clearUser(userId);
     }
 
     /**
      * Проверка, находится ли пользователь в процессе регистрации
      */
+    // Признак того, что пользователь находится именно
+    // в процессе **регистрации** (имена/телефон). Мы не должны
+    // возвращать true для других состояний (склад, аренда и т.п.).
     isUserInRegistration(userId: number): boolean {
-        const state = registrationStates.get(userId);
-        return state !== undefined && state !== RegistrationState.IDLE;
+        const state = stateManager.getUserState(userId);
+        return (
+            state === RegistrationState.AWAITING_NAME ||
+            state === RegistrationState.AWAITING_PHONE
+        );
     }
 }

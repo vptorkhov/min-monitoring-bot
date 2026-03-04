@@ -17,18 +17,17 @@ export function createRegistrationStateMiddleware(
     registrationHandler: RegistrationHandler
 ) {
     /**
-     * Возвращает функцию-обработчик для использования с bot.on('message')
-     * 
-     * @param msg - входящее сообщение от Telegram
-     * @param next - функция для передачи управления дальше
+     * Простая функция-обработчик для bot.on('message').
+     * Она проверяет, находится ли пользователь в регистрации и
+     * если да — перенаправляет текст в registrationHandler.
+     * В случае команды или когда пользователь не в процессе,
+     * ничего не делает и позволяет другим слушателям сработать.
      */
     return async function registrationStateMiddleware(
-        msg: TelegramBot.Message,
-        next: (msg: TelegramBot.Message) => void
+        msg: TelegramBot.Message
     ) {
-        // Если нет from (служебные сообщения) - пропускаем
+        // Если нет from (служебные сообщения) - ничего не делаем
         if (!msg.from) {
-            next(msg);
             return;
         }
 
@@ -38,24 +37,20 @@ export function createRegistrationStateMiddleware(
         // Проверяем, находится ли пользователь в процессе регистрации
         const isInRegistration = registrationHandler.isUserInRegistration(userId);
 
-        // Если пользователь не регистрируется - пропускаем сообщение дальше
+        // Если пользователь не регистрируется - выходим
         if (!isInRegistration) {
-            next(msg);
             return;
         }
 
         // Пользователь в процессе регистрации
-        // Проверяем, является ли сообщение командой
+        // Если это команда — позволяем обработчикам команд выполнить свою логику
         if (text && isCommand(text)) {
-            // Команда имеет приоритет - пропускаем к обработчикам команд
             console.log(`Команда ${text} от пользователя ${userId} пропущена к обработчикам (приоритет над регистрацией)`);
-            next(msg);
             return;
         }
 
         // Не команда и пользователь регистрируется - обрабатываем в registrationHandler
         await registrationHandler.handleMessage(msg);
-        // НЕ вызываем next() - сообщение обработано
     };
 }
 
@@ -69,19 +64,11 @@ export function setupRegistrationMiddleware(
     bot: TelegramBot,
     registrationHandler: RegistrationHandler
 ) {
-    // Создаем middleware
+    // Создаем middleware функцию
     const middleware = createRegistrationStateMiddleware(registrationHandler);
 
-    // Регистрируем middleware на все сообщения
-    bot.on('message', async (msg) => {
-        // Создаем next функцию, которая будет вызвана, если пользователь не регистрируется
-        // или если сообщение является командой
-        const next = (message: TelegramBot.Message) => {
-            console.log(`Сообщение от пользователя ${message.from?.id} пропущено к командам`);
-        };
-
-        await middleware(msg, next);
-    });
+    // Регистрируем её на все сообщения
+    bot.on('message', middleware);
 
     console.log('✅ Middleware регистрации настроен');
 }

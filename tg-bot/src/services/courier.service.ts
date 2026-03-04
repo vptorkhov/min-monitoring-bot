@@ -65,6 +65,11 @@ export class CourierService {
         return await this.repository.existsByPhoneNumber(phoneNumber);
     }
 
+    // Получить список всех активных курьеров (для уведомления об активации)
+    async getActiveCouriers(): Promise<CourierFromDB[]> {
+        return await this.repository.findAllActive();
+    }
+
     // Регистрация нового курьера
     async registerCourier(data: {
         fullName: string;

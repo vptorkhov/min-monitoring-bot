@@ -3,6 +3,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 import dotenv from 'dotenv';
 import { initBot } from './init';
+import { ActivationNotifier } from '../services/activation-notifier.service';
 
 dotenv.config();
 
@@ -29,8 +30,12 @@ export default async function createAndSetupBot() {
     // Инициализация всех компонентов бота (сервисы, обработчики, middleware, команды)
     const { courierService, registrationHandler } = initBot(bot);
 
+    // Нотификатор активации стартует сразу после поднятия бота
+    const notifier = new ActivationNotifier(bot, courierService);
+    notifier.start();
+
     console.log('✅ Telegram бот успешно настроен и запущен');
 
     // Возвращаем созданные экземпляры для возможного использования в других частях приложения
-    return { bot, courierService, registrationHandler };
+    return { bot, courierService, registrationHandler, notifier };
 }

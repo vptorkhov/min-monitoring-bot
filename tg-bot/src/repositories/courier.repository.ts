@@ -13,6 +13,7 @@ export interface CreateCourierData {
 // Интерфейс для данных курьера из БД
 export interface CourierFromDB {
     id: number;
+    telegram_id: number;              // добавлено: поле присутствует в таблице
     full_name: string;
     nickname: string | null;
     phone_number: string;
@@ -68,6 +69,14 @@ export class CourierRepository {
         );
 
         return (result.rowCount ?? 0) > 0;
+    }
+
+    // Получить всех активированных курьеров
+    async findAllActive(): Promise<CourierFromDB[]> {
+        const result = await this.pool.query<CourierFromDB>(
+            'SELECT * FROM couriers WHERE is_active = true'
+        );
+        return result.rows;
     }
 
     // --- Новый метод: обновление склада курьера ---
