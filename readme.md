@@ -85,7 +85,7 @@ min-monitoring-bot/
         │   ├── middlewares/              # Middleware для управления состояниями пользователя
         │   │   ├── index.ts
         │   │   ├── registration-state.middleware.ts  # Контроль процесса регистрации
-        │   │   └── user-state.ts         # Временное хранение состояний и данных (например, выбор склада)
+        │   │   └── state-manager.ts       # Централизованный менеджер состояний пользователей
         │   │
         │   └── keyboards/                # Telegram-клавиатуры (пока не используются)
         │

@@ -3,9 +3,9 @@
  * 
  * Заменяет собой:
  * - registrationStates и registrationTempData из registration.handler.ts
- * - userStates и userTempData из user-state.ts
  * 
- * Единая точка управления всеми состояниями и временными данными.
+ * Единая точка управления всеми состояниями и временными данными; ранее
+ * содержал логику, вынесенную из deprecated `user-state.ts`.
  */
 
 interface UserStateData {

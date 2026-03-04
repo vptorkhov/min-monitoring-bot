@@ -1,10 +1,8 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { RegistrationHandler } from '../handlers/registration.handler';
 import {
-    getUserState,
-    resetUserState,
-    resetUserTempData
-} from '../middlewares/user-state';
+    stateManager
+} from '../state-manager';
 
 /**
  * Регистрация команды /cancel
@@ -34,10 +32,10 @@ export function registerCancelCommand(
         }
 
         // 2️⃣ Проверяем общее состояние (например, выбор склада)
-        const state = getUserState(userId);
+        const state = stateManager.getUserState(userId);
         if (state) {
-            resetUserState(userId);
-            resetUserTempData(userId);
+            stateManager.resetUserState(userId);
+            stateManager.resetUserTempData(userId);
             wasInProcess = true;
         }
 
