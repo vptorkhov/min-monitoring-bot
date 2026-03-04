@@ -10,6 +10,10 @@ import { WarehouseService } from '../../services/warehouse.service';
 import { WarehouseRepository } from '../../repositories/warehouse.repository';
 import { getDatabase } from '../../config/database';
 import { registerCancelCommand } from './cancel';
+import { SessionService } from '../../services/session.service';
+import { MobilityDeviceRepository } from '../../repositories/mobility-device.repository';
+import { registerTakeSimCommand } from './take-sim';
+import { registerReturnSimCommand } from './return-sim';
 
 /**
  * Регистрация всех команд бота
@@ -32,14 +36,24 @@ export function registerAllCommands(
     const warehouseRepository = new WarehouseRepository();
     const warehouseService = new WarehouseService(warehouseRepository);
 
+    // Сессия и устройства
+    const sessionService = new SessionService(courierService);
+    const deviceRepository = new MobilityDeviceRepository();
+
     // Регистрируем команду /set_warehouse
     registerSetWarehouseCommand(bot, courierService, warehouseService);
+
+    // Регистрируем команды для работы с СИМ
+    registerTakeSimCommand(bot, courierService, sessionService, deviceRepository);
+    registerReturnSimCommand(bot, courierService, sessionService);
 
     // Устанавливаем список команд для отображения в меню Telegram
     // Включаем только реально существующие команды
     bot.setMyCommands([
         { command: 'start', description: '🚀 Начать работу с ботом' },
         { command: 'set_warehouse', description: '🏭 Выбрать склад' },
+        { command: 'take_sim', description: '🛴 Взять СИМ' },
+        { command: 'return_sim', description: '🔄 Сдать СИМ' },
         { command: 'cancel', description: '❌ Отменить текущее действие' }
         // TODO: добавить /help когда будет реализован
     ]).then(() => {

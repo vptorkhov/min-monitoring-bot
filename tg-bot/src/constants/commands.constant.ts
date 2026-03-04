@@ -8,7 +8,9 @@ export const BOT_COMMANDS = [
     '/start',
     '/cancel',
     '/help',
-    '/set_warehouse'
+    '/set_warehouse',
+    '/take_sim',      // взять средство индивидуальной мобильности
+    '/return_sim'     // сдать СИМ
     // здесь будут добавляться остальные команды
 ] as const;
 

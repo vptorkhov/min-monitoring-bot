@@ -5,6 +5,7 @@ import { validatePhoneNumber, formatPhoneNumber } from '../validators/phone.vali
 import { extractUserDataFromMessage } from '../utils/telegram.utils';
 import { getDatabase } from '../config/database';
 import { WarehouseService } from './warehouse.service'; // Импорт сервиса складов
+import { SessionRepository } from '../repositories/session.repository'; // проверка активной сессии
 
 export interface CourierCheckResult {
     exists: boolean;
@@ -132,6 +133,13 @@ export class CourierService {
         }
 
         const courier = check.courier;
+
+        // Запрет на смену склада, если у курьера есть активная сессия
+        const sessionRepo = new SessionRepository();
+        const hasActive = !!(await sessionRepo.findActiveByCourier(courier.id));
+        if (hasActive) {
+            return { success: false, message: 'У вас есть активная сессия, сначала сдайте СИМ' };
+        }
 
         // 2. Проверка выбранного склада
         const isValidWarehouse = await warehouseService.validateWarehouseIsActive(warehouseId);

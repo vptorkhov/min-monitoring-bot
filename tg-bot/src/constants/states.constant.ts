@@ -17,3 +17,14 @@ export const WarehouseState = {
 
 // Тип для состояния склада
 export type WarehouseStateType = typeof WarehouseState[keyof typeof WarehouseState];
+
+// Состояния для процессов взятия/сдачи СИМ
+export const DeviceSessionState = {
+    TAKE_DEVICE_SELECT: 'take_device_select',           // ожидаем ввод номера из списка для взятия
+    RETURN_ASK_DAMAGE: 'return_ask_damage',             // спрашиваем, есть ли повреждения при сдаче
+    RETURN_DAMAGE_TYPE: 'return_damage_type',           // выбираем тип повреждения
+    RETURN_DESCRIPTION: 'return_description'            // просим описать повреждения
+} as const;
+
+// Тип для состояний сессии устройства
+export type DeviceSessionStateType = typeof DeviceSessionState[keyof typeof DeviceSessionState];

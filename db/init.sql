@@ -1,3 +1,28 @@
+-- Таблица для хранения информации о складах
+CREATE TABLE IF NOT EXISTS warehouse (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    address VARCHAR(200),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN NOT NULL DEFAULT true
+);
+
+-- Комментарии к таблице и колонкам
+COMMENT ON TABLE warehouse IS 'Склады';
+COMMENT ON COLUMN warehouse.id IS 'Уникальный идентификатор склада';
+COMMENT ON COLUMN warehouse.name IS 'Название склада';
+COMMENT ON COLUMN warehouse.address IS 'Адрес склада';
+COMMENT ON COLUMN warehouse.created_at IS 'Дата создания записи';
+COMMENT ON COLUMN warehouse.updated_at IS 'Дата последнего обновления';
+COMMENT ON COLUMN warehouse.is_active IS 'Активен ли склад';
+
+-- Индекс для поиска по названию склада
+CREATE INDEX idx_warehouse_name ON warehouse(name);
+
+-- Индекс для фильтрации по активности
+CREATE INDEX idx_warehouse_is_active ON warehouse(is_active);
+
 -- Таблица для хранения информации о средствах индивидуальной мобильности
 CREATE TABLE IF NOT EXISTS mobility_devices (
     id SERIAL PRIMARY KEY,
@@ -31,31 +56,6 @@ COMMENT ON COLUMN mobility_devices.warehouse_id IS 'ID склада, к кото
 CREATE INDEX idx_mobility_devices_status ON mobility_devices(status);
 CREATE INDEX idx_mobility_devices_is_active ON mobility_devices(is_active);
 CREATE INDEX idx_mobility_devices_is_personal ON mobility_devices(is_personal);
-
--- Таблица для хранения информации о складах
-CREATE TABLE IF NOT EXISTS warehouse (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    address VARCHAR(200),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_active BOOLEAN NOT NULL DEFAULT true
-);
-
--- Комментарии к таблице и колонкам
-COMMENT ON TABLE warehouse IS 'Склады';
-COMMENT ON COLUMN warehouse.id IS 'Уникальный идентификатор склада';
-COMMENT ON COLUMN warehouse.name IS 'Название склада';
-COMMENT ON COLUMN warehouse.address IS 'Адрес склада';
-COMMENT ON COLUMN warehouse.created_at IS 'Дата создания записи';
-COMMENT ON COLUMN warehouse.updated_at IS 'Дата последнего обновления';
-COMMENT ON COLUMN warehouse.is_active IS 'Активен ли склад';
-
--- Индекс для поиска по названию склада
-CREATE INDEX idx_warehouse_name ON warehouse(name);
-
--- Индекс для фильтрации по активности
-CREATE INDEX idx_warehouse_is_active ON warehouse(is_active);
 
 -- Таблица для хранения информации о курьерах
 CREATE TABLE IF NOT EXISTS couriers (
