@@ -5,6 +5,10 @@ import { CourierService } from '../../services/courier.service';
 import { RegistrationHandler } from '../handlers/registration.handler';
 import { registerStartCommand } from './start';
 import { BOT_COMMANDS } from '../../constants/commands.constant';
+import { registerSetWarehouseCommand } from './set-warehouse';
+import { WarehouseService } from '../../services/warehouse.service';
+import { WarehouseRepository } from '../../repositories/warehouse.repository';
+import { getDatabase } from '../../config/database';
 
 /**
  * Регистрация всех команд бота
@@ -21,13 +25,18 @@ export function registerAllCommands(
 
     // Регистрируем только существующие команды
     registerStartCommand(bot, courierService, registrationHandler);
-    // TODO: добавить registerCancelCommand когда будет создан
-    // TODO: добавить registerHelpCommand когда будет создан
+    // Создаём репозиторий и сервис складов
+    const warehouseRepository = new WarehouseRepository();
+    const warehouseService = new WarehouseService(warehouseRepository);
+
+    // Регистрируем команду /set_warehouse
+    registerSetWarehouseCommand(bot, courierService, warehouseService);
 
     // Устанавливаем список команд для отображения в меню Telegram
     // Включаем только реально существующие команды
     bot.setMyCommands([
-        { command: 'start', description: '🚀 Начать работу с ботом' }
+        { command: 'start', description: '🚀 Начать работу с ботом' },
+        { command: 'set_warehouse', description: '🏭 Выбрать склад' }
         // TODO: добавить /cancel когда будет реализован
         // TODO: добавить /help когда будет реализован
     ]).then(() => {

@@ -3,16 +3,15 @@
 import { CourierRepository, CreateCourierData, CourierFromDB } from '../repositories/courier.repository';
 import { validatePhoneNumber, formatPhoneNumber } from '../validators/phone.validator';
 import { extractUserDataFromMessage } from '../utils/telegram.utils';
-import { getDatabase } from '../config/database'; // <-- импортируем функцию получения pool
+import { getDatabase } from '../config/database';
+import { WarehouseService } from './warehouse.service'; // Импорт сервиса складов
 
-// Интерфейс для результата проверки курьера
 export interface CourierCheckResult {
     exists: boolean;
     courier?: CourierFromDB;
     isActive?: boolean;
 }
 
-// Интерфейс для результата регистрации
 export interface RegistrationResult {
     success: boolean;
     courier?: CourierFromDB;
@@ -22,8 +21,7 @@ export interface RegistrationResult {
 export class CourierService {
     private repository: CourierRepository;
 
-    constructor() { // <-- убрали параметр pool из конструктора
-        // Получаем pool через getDatabase() и создаем репозиторий
+    constructor() {
         const pool = getDatabase();
         this.repository = new CourierRepository(pool);
     }
@@ -75,7 +73,6 @@ export class CourierService {
         nickname?: string | null;
     }): Promise<RegistrationResult> {
         try {
-            // Проверяем, не занят ли номер
             const isPhoneTaken = await this.isPhoneNumberTaken(data.phoneNumber);
 
             if (isPhoneTaken) {
@@ -85,7 +82,6 @@ export class CourierService {
                 };
             }
 
-            // Создаем курьера
             const createData: CreateCourierData = {
                 fullName: data.fullName,
                 phoneNumber: data.phoneNumber,
@@ -109,8 +105,42 @@ export class CourierService {
         }
     }
 
-    // Извлечение данных из сообщения Telegram (обертка над утилитой)
+    // Извлечение данных из сообщения Telegram
     extractUserData(msg: any) {
         return extractUserDataFromMessage(msg);
+    }
+
+    // --- Новый метод: прикрепление курьера к складу ---
+    async assignWarehouse(
+        telegramId: number,
+        warehouseId: number,
+        warehouseService: WarehouseService
+    ): Promise<{ success: boolean; message?: string; courier?: CourierFromDB }> {
+
+        // 1. Проверка существования курьера
+        const check = await this.checkCourierExists(telegramId);
+        if (!check.exists || !check.courier) {
+            return { success: false, message: 'Курьер не найден' };
+        }
+        if (!check.isActive) {
+            return { success: false, message: 'Курьер не активирован администратором' };
+        }
+
+        const courier = check.courier;
+
+        // 2. Проверка выбранного склада
+        const isValidWarehouse = await warehouseService.validateWarehouseIsActive(warehouseId);
+        if (!isValidWarehouse) {
+            return { success: false, message: 'Выбранный склад не существует или не активен' };
+        }
+
+        // 3. Обновление склада в БД
+        const updatedCourier = await this.repository.updateWarehouse(courier.id, warehouseId);
+        if (!updatedCourier) {
+            return { success: false, message: 'Не удалось обновить склад курьера' };
+        }
+
+        // 4. Возврат результата
+        return { success: true, courier: updatedCourier };
     }
 }

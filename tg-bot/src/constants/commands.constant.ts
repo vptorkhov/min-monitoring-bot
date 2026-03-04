@@ -8,6 +8,7 @@ export const BOT_COMMANDS = [
     '/start',
     '/cancel',
     '/help',
+    '/set_warehouse'
     // здесь будут добавляться остальные команды
 ] as const;
 

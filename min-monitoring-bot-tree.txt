@@ -3,6 +3,8 @@ min-monitoring-bot
 │   ├── docker-compose.yml
 │   ├── init.sql
 │   └── readme.md
+├── min-monitoring-bot-tree.txt
+├── readme.md
 └── tg-bot
     ├── .env
     ├── .env.example
@@ -14,6 +16,7 @@ min-monitoring-bot
     │   ├── bot
     │   │   ├── commands
     │   │   │   ├── index.ts
+    │   │   │   ├── set-warehouse.ts
     │   │   │   └── start.ts
     │   │   ├── handlers
     │   │   │   └── registration.handler.ts
@@ -22,7 +25,8 @@ min-monitoring-bot
     │   │   ├── keyboards
     │   │   └── middlewares
     │   │       ├── index.ts
-    │   │       └── registration-state.middleware.ts
+    │   │       ├── registration-state.middleware.ts
+    │   │       └── user-state.ts
     │   ├── config
     │   │   └── database.ts
     │   ├── constants
@@ -30,11 +34,15 @@ min-monitoring-bot
     │   │   └── states.constant.ts
     │   ├── index.ts
     │   ├── repositories
-    │   │   └── courier.repository.ts
+    │   │   ├── courier.repository.ts
+    │   │   ├── types
+    │   │   │   └── warehouse.type.ts
+    │   │   └── warehouse.repository.ts
     │   ├── server
     │   │   └── index.ts
     │   ├── services
-    │   │   └── courier.service.ts
+    │   │   ├── courier.service.ts
+    │   │   └── warehouse.service.ts
     │   ├── utils
     │   │   └── telegram.utils.ts
     │   └── validators

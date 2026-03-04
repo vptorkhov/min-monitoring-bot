@@ -9,3 +9,11 @@ export const RegistrationState = {
 
 // Тип для состояний регистрации (для TypeScript)
 export type RegistrationStateType = typeof RegistrationState[keyof typeof RegistrationState];
+
+// Добавляем состояние выбора склада
+export const WarehouseState = {
+    SELECTING_WAREHOUSE: 'selecting_warehouse'
+} as const;
+
+// Тип для состояния склада
+export type WarehouseStateType = typeof WarehouseState[keyof typeof WarehouseState];
