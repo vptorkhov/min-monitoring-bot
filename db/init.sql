@@ -7,8 +7,13 @@ CREATE TABLE IF NOT EXISTS mobility_devices (
     status_comment TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_active BOOLEAN NOT NULL DEFAULT true
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    warehouse_id INTEGER,
+    CONSTRAINT fk_warehouse FOREIGN KEY (warehouse_id) REFERENCES warehouse(id) ON DELETE SET NULL
 );
+
+INSERT INTO mobility_devices (device_number, is_personal, status, is_active) 
+VALUES ('ЛИЧНЫЙ', true, 'ok', true);
 
 -- Комментарии к таблице и колонкам (опционально)
 COMMENT ON TABLE mobility_devices IS 'Средства индивидуальной мобильности';
@@ -20,6 +25,7 @@ COMMENT ON COLUMN mobility_devices.status_comment IS 'Подробное опи�
 COMMENT ON COLUMN mobility_devices.created_at IS 'Дата создания записи';
 COMMENT ON COLUMN mobility_devices.updated_at IS 'Дата последнего обновления';
 COMMENT ON COLUMN mobility_devices.is_active IS 'Активна ли запись';
+COMMENT ON COLUMN mobility_devices.warehouse_id IS 'ID склада, к которому привязано устройство';
 
 -- Индексы для оптимизации запросов
 CREATE INDEX idx_mobility_devices_status ON mobility_devices(status);
