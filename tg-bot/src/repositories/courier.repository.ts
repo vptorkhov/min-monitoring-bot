@@ -80,7 +80,7 @@ export class CourierRepository {
     }
 
     // --- Новый метод: обновление склада курьера ---
-    async updateWarehouse(id: number, warehouseId: number): Promise<CourierFromDB | null> {
+    async updateWarehouse(id: number, warehouseId: number | null): Promise<CourierFromDB | null> {
         const result = await this.pool.query<CourierFromDB>(
             `UPDATE couriers 
              SET warehouse_id = $1, updated_at = NOW() 

@@ -6,9 +6,9 @@ import { RegistrationHandler } from '../handlers/registration.handler';
 import { registerStartCommand } from './start';
 import { BOT_COMMANDS } from '../../constants/commands.constant';
 import { registerSetWarehouseCommand } from './set-warehouse';
+import { registerClearWarehouseCommand } from './clear-warehouse';
 import { WarehouseService } from '../../services/warehouse.service';
 import { WarehouseRepository } from '../../repositories/warehouse.repository';
-import { getDatabase } from '../../config/database';
 import { registerCancelCommand } from './cancel';
 import { SessionService } from '../../services/session.service';
 import { MobilityDeviceRepository } from '../../repositories/mobility-device.repository';
@@ -42,6 +42,8 @@ export function registerAllCommands(
 
     // Регистрируем команду /set_warehouse
     registerSetWarehouseCommand(bot, courierService, warehouseService);
+    // Регистрируем команду /clear_warehouse
+    registerClearWarehouseCommand(bot, courierService);
 
     // Регистрируем команды для работы с СИМ
     registerTakeSimCommand(bot, courierService, sessionService, deviceRepository);
@@ -52,6 +54,7 @@ export function registerAllCommands(
     bot.setMyCommands([
         { command: 'start', description: '🚀 Начать работу с ботом' },
         { command: 'set_warehouse', description: '🏭 Выбрать склад' },
+        { command: 'clear_warehouse', description: '🚫 Отвязаться от склада' },
         { command: 'take_sim', description: '🛴 Взять СИМ' },
         { command: 'return_sim', description: '🔄 Сдать СИМ' },
         { command: 'cancel', description: '❌ Отменить текущее действие' }
