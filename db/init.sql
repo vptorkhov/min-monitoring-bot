@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS couriers (
     phone_number VARCHAR(20) UNIQUE NOT NULL,
     warehouse_id INTEGER,
     is_active BOOLEAN DEFAULT FALSE,
+    notified_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_courier_warehouse FOREIGN KEY (warehouse_id) 
@@ -78,6 +79,7 @@ COMMENT ON COLUMN couriers.nickname IS 'Псевдоним (никнейм) ку
 COMMENT ON COLUMN couriers.phone_number IS 'Номер телефона';
 COMMENT ON COLUMN couriers.warehouse_id IS 'ID склада, к которому привязан курьер';
 COMMENT ON COLUMN couriers.is_active IS 'Активен ли курьер';
+COMMENT ON COLUMN couriers.notified_at IS 'Время отправки уведомления об активации (null если не отправлено)';
 COMMENT ON COLUMN couriers.created_at IS 'Дата создания записи';
 COMMENT ON COLUMN couriers.updated_at IS 'Дата последнего обновления';
 COMMENT ON COLUMN couriers.telegram_id IS 'ID пользователя в Telegram';

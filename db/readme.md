@@ -43,9 +43,12 @@
 - **phone_number** VARCHAR(20) UNIQUE NOT NULL
 - **warehouse_id** INTEGER REFERENCES warehouse(id) ON DELETE SET NULL
 - **is_active** BOOLEAN DEFAULT FALSE
+- **notified_at** TIMESTAMP NULL — время отправки уведомления об активации (NULL если не отправлено)
 - **created_at**, **updated_at** TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
 Индексы: `idx_couriers_warehouse_id`, `idx_couriers_phone_number`, `idx_couriers_is_active`, `idx_couriers_nickname`.
+
+**Отслеживание уведомлений:** Поле `notified_at` используется фоновым процессом `ActivationNotifier` чтобы избежать отправки дублирующихся уведомлений при перезапуске бота.
 
 ### `session` — Курьерские сессии
 

@@ -71,6 +71,16 @@ export class CourierService {
         return await this.repository.findAllActive();
     }
 
+    // Получить активных курьеров, которым ещё не отправлено уведомление
+    async getActiveNotNotifiedCouriers(): Promise<CourierFromDB[]> {
+        return await this.repository.findActiveNotNotified();
+    }
+
+    // Отметить курьера как уведомлённого
+    async markNotified(courierId: number): Promise<void> {
+        await this.repository.updateNotifiedAt(courierId);
+    }
+
     // Регистрация нового курьера
     async registerCourier(data: {
         fullName: string;
