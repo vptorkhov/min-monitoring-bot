@@ -49,22 +49,6 @@ export function registerAllCommands(
     registerTakeSimCommand(bot, courierService, sessionService, deviceRepository);
     registerReturnSimCommand(bot, courierService, sessionService);
 
-    // Устанавливаем список команд для отображения в меню Telegram
-    // Включаем только реально существующие команды
-    bot.setMyCommands([
-        { command: 'start', description: '🚀 Начать работу с ботом' },
-        { command: 'set_warehouse', description: '🏭 Выбрать склад' },
-        { command: 'clear_warehouse', description: '🚫 Отвязаться от склада' },
-        { command: 'take_sim', description: '🛴 Взять СИМ' },
-        { command: 'return_sim', description: '🔄 Сдать СИМ' },
-        { command: 'cancel', description: '❌ Отменить текущее действие' }
-        // TODO: добавить /help когда будет реализован
-    ]).then(() => {
-        console.log('✅ Меню команд обновлено');
-    }).catch((error) => {
-        console.error('❌ Ошибка при обновлении меню команд:', error);
-    });
-
     console.log('✅ Команды бота зарегистрированы');
 
     // Возвращаем список зарегистрированных команд

@@ -54,18 +54,14 @@ export function registerStartCommand(
                 return;
             }
 
-            // Курьер активен - приветствуем и показываем главное меню
+            // Курьер активен - приветствуем
             const greeting = `С возвращением, ${courier.full_name}!`;
 
             await bot.sendMessage(
                 chatId,
                 `👋 ${greeting}\n\n` +
-                'Добро пожаловать в Мониторинг СИМ.\n\n' +
-                'Используйте меню для навигации:'
+                'Добро пожаловать в Мониторинг СИМ.\n\n'
             );
-
-            // TODO: здесь будет вызов метода для показа главного меню
-            // Например: await this.showMainMenu(chatId, courier);
 
         } catch (error) {
             console.error('Ошибка в обработчике /start:', error);
