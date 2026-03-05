@@ -10,6 +10,8 @@ export interface SessionRecord {
     warehouse_id: number;
     start_date: Date;
     end_date: Date | null;
+    sim_status_after: string | null;
+    status_comment: string | null;
     is_active: boolean;
 }
 
@@ -44,13 +46,13 @@ export class SessionRepository {
         return rows[0];
     }
 
-    public async closeSession(courierId: number, endDate: Date = new Date()): Promise<void> {
+    public async closeSession(courierId: number, endDate: Date = new Date(), simStatusAfter?: string, statusComment?: string): Promise<void> {
         const query = `
             UPDATE session
-            SET end_date = $1
-            WHERE courier_id = $2 AND is_active = true
+            SET end_date = $1, sim_status_after = $2, status_comment = $3
+            WHERE courier_id = $4 AND is_active = true
         `;
-        await this.db.query(query, [endDate.toISOString(), courierId]);
+        await this.db.query(query, [endDate.toISOString(), simStatusAfter || null, statusComment || null, courierId]);
     }
 
     public async findById(id: number): Promise<SessionRecord | null> {

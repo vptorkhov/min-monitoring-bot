@@ -29,7 +29,6 @@ CREATE TABLE IF NOT EXISTS mobility_devices (
     device_number VARCHAR(20),
     is_personal BOOLEAN NOT NULL,
     status VARCHAR(20),
-    status_comment TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_active BOOLEAN NOT NULL DEFAULT true,
@@ -46,7 +45,6 @@ COMMENT ON COLUMN mobility_devices.id IS 'Уникальный идентифи�
 COMMENT ON COLUMN mobility_devices.device_number IS 'Номер устройства (может быть пустым)';
 COMMENT ON COLUMN mobility_devices.is_personal IS 'Признак личного устройства';
 COMMENT ON COLUMN mobility_devices.status IS 'Статус устройства';
-COMMENT ON COLUMN mobility_devices.status_comment IS 'Подробное описание статуса';
 COMMENT ON COLUMN mobility_devices.created_at IS 'Дата создания записи';
 COMMENT ON COLUMN mobility_devices.updated_at IS 'Дата последнего обновления';
 COMMENT ON COLUMN mobility_devices.is_active IS 'Активна ли запись';
@@ -98,6 +96,8 @@ CREATE TABLE IF NOT EXISTS session (
     warehouse_id INTEGER NOT NULL,
     start_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     end_date TIMESTAMP,
+    sim_status_after VARCHAR(20),
+    status_comment TEXT,
     is_active BOOLEAN GENERATED ALWAYS AS (end_date IS NULL) STORED,
     CONSTRAINT fk_session_courier FOREIGN KEY (courier_id) 
         REFERENCES couriers(id) ON DELETE RESTRICT,
@@ -115,6 +115,8 @@ COMMENT ON COLUMN session.device_id IS 'ID устройства (средств�
 COMMENT ON COLUMN session.warehouse_id IS 'ID склада, с которого стартовала сессия';
 COMMENT ON COLUMN session.start_date IS 'Дата и время начала сессии';
 COMMENT ON COLUMN session.end_date IS 'Дата и время окончания сессии (NULL если активна)';
+COMMENT ON COLUMN session.sim_status_after IS 'Статус СИМ после завершения сессии';
+COMMENT ON COLUMN session.status_comment IS 'Комментарий о состоянии СИМ (повреждения и т.д.)';
 COMMENT ON COLUMN session.is_active IS 'Генерируемое поле: true если сессия активна (end_date IS NULL)';
 
 -- Индексы для оптимизации запросов

@@ -8,7 +8,6 @@ export interface MobilityDevice {
     device_number: string | null;
     is_personal: boolean;
     status: string;
-    status_comment: string | null;
     warehouse_id: number | null;
     is_active: boolean;
     created_at: Date;
@@ -40,18 +39,13 @@ export class MobilityDeviceRepository {
         return rows;
     }
 
-    public async updateStatus(deviceId: number, status: string, statusComment?: string | null, makeInactive?: boolean): Promise<void> {
+    public async updateStatus(deviceId: number, status: string, makeInactive?: boolean): Promise<void> {
         const parts: string[] = [];
         const params: any[] = [];
         let idx = 1;
 
         parts.push(`status = $${idx++}`);
         params.push(status);
-
-        if (statusComment !== undefined) {
-            parts.push(`status_comment = $${idx++}`);
-            params.push(statusComment);
-        }
 
         if (makeInactive) {
             parts.push(`is_active = false`);

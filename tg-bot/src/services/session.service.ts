@@ -122,12 +122,12 @@ export class SessionService {
             return { success: false, error: 'У вас нет активной сессии' };
         }
 
-        // закрываем сессию
-        await this.sessionRepo.closeSession(courier.id);
+        // закрываем сессию с сохранением статуса и комментария
+        await this.sessionRepo.closeSession(courier.id, new Date(), damage.type, damage.comment);
 
-        // обновляем статус устройства
+        // обновляем статус устройства (без комментария)
         const makeInactive = damage.type === 'broken';
-        await this.deviceRepo.updateStatus(active.device_id, damage.type, damage.comment, makeInactive);
+        await this.deviceRepo.updateStatus(active.device_id, damage.type, makeInactive);
 
         return { success: true, session: active };
     }

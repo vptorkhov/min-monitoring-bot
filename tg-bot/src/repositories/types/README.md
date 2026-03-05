@@ -23,5 +23,9 @@ interface Warehouse {
 
 - Соответствуют структуре таблиц БД
 - Используются репозиториями для типизации возвращаемых данных
-- Обеспечивают типобезопасность на уровне доступа к данным</content>
-  <parameter name="filePath">d:\Vova\bots\min-monitoring-bot\tg-bot\src\repositories\types\README.md
+- Обеспечивают типобезопасность на уровне доступа к данным
+
+## Примечание
+
+Типы `SessionRecord` и `MobilityDevice` определены непосредственно в своих репозиториях (`session.repository.ts` и `mobility-device.repository.ts` соответственно) для удобства коллокации с логикой доступа к данным.</content>
+<parameter name="filePath">d:\Vova\bots\min-monitoring-bot\tg-bot\src\repositories\types\README.md

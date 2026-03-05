@@ -10,7 +10,6 @@
 - **device_number** VARCHAR(20) — номер устройства (может быть пустым)
 - **is_personal** BOOLEAN NOT NULL — признак личного устройства
 - **status** VARCHAR(20) — текущий статус
-- **status_comment** TEXT — подробное описание статуса
 - **warehouse_id** INTEGER — внешний ключ на `warehouse(id)`, ON DELETE SET NULL
 - **is_active** BOOLEAN NOT NULL DEFAULT true — активность записи
 - **created_at** TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -56,6 +55,8 @@
 - **warehouse_id** INTEGER NOT NULL REFERENCES warehouse(id) ON DELETE RESTRICT
 - **start_date** TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 - **end_date** TIMESTAMP
+- **sim_status_after** VARCHAR(20) — статус СИМ после завершения сессии
+- **status_comment** TEXT — комментарий о состоянии СИМ (повреждения и т.д.)
 - **is_active** BOOLEAN GENERATED ALWAYS AS (end_date IS NULL) STORED
 
 Индексы: `idx_session_courier_id`, `idx_session_device_id`, `idx_session_warehouse_id`, `idx_session_dates`, `idx_session_is_active`, а также частичный `idx_session_active_courier` для активных сессий по курьеру.
