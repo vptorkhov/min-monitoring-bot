@@ -19,6 +19,7 @@ export interface CourierFromDB {
     phone_number: string;
     warehouse_id: number | null;
     is_active: boolean;
+    notified_at: Date | null;
     created_at: Date;
     updated_at: Date;
 }
@@ -79,8 +80,24 @@ export class CourierRepository {
         return result.rows;
     }
 
+    // Получить активированных курьеров, которым ещё не отправлено уведомление
+    async findActiveNotNotified(): Promise<CourierFromDB[]> {
+        const result = await this.pool.query<CourierFromDB>(
+            'SELECT * FROM couriers WHERE is_active = true AND notified_at IS NULL'
+        );
+        return result.rows;
+    }
+
+    // Обновить время отправки уведомления
+    async updateNotifiedAt(id: number): Promise<void> {
+        await this.pool.query(
+            'UPDATE couriers SET notified_at = NOW() WHERE id = $1',
+            [id]
+        );
+    }
+
     // --- Новый метод: обновление склада курьера ---
-    async updateWarehouse(id: number, warehouseId: number): Promise<CourierFromDB | null> {
+    async updateWarehouse(id: number, warehouseId: number | null): Promise<CourierFromDB | null> {
         const result = await this.pool.query<CourierFromDB>(
             `UPDATE couriers 
              SET warehouse_id = $1, updated_at = NOW() 

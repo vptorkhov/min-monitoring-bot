@@ -6,10 +6,14 @@ import { RegistrationHandler } from '../handlers/registration.handler';
 import { registerStartCommand } from './start';
 import { BOT_COMMANDS } from '../../constants/commands.constant';
 import { registerSetWarehouseCommand } from './set-warehouse';
+import { registerClearWarehouseCommand } from './clear-warehouse';
 import { WarehouseService } from '../../services/warehouse.service';
 import { WarehouseRepository } from '../../repositories/warehouse.repository';
-import { getDatabase } from '../../config/database';
 import { registerCancelCommand } from './cancel';
+import { SessionService } from '../../services/session.service';
+import { MobilityDeviceRepository } from '../../repositories/mobility-device.repository';
+import { registerTakeSimCommand } from './take-sim';
+import { registerReturnSimCommand } from './return-sim';
 
 /**
  * Регистрация всех команд бота
@@ -32,21 +36,18 @@ export function registerAllCommands(
     const warehouseRepository = new WarehouseRepository();
     const warehouseService = new WarehouseService(warehouseRepository);
 
+    // Сессия и устройства
+    const sessionService = new SessionService(courierService);
+    const deviceRepository = new MobilityDeviceRepository();
+
     // Регистрируем команду /set_warehouse
     registerSetWarehouseCommand(bot, courierService, warehouseService);
+    // Регистрируем команду /clear_warehouse
+    registerClearWarehouseCommand(bot, courierService);
 
-    // Устанавливаем список команд для отображения в меню Telegram
-    // Включаем только реально существующие команды
-    bot.setMyCommands([
-        { command: 'start', description: '🚀 Начать работу с ботом' },
-        { command: 'set_warehouse', description: '🏭 Выбрать склад' },
-        { command: 'cancel', description: '❌ Отменить текущее действие' }
-        // TODO: добавить /help когда будет реализован
-    ]).then(() => {
-        console.log('✅ Меню команд обновлено');
-    }).catch((error) => {
-        console.error('❌ Ошибка при обновлении меню команд:', error);
-    });
+    // Регистрируем команды для работы с СИМ
+    registerTakeSimCommand(bot, courierService, sessionService, deviceRepository);
+    registerReturnSimCommand(bot, courierService, sessionService);
 
     console.log('✅ Команды бота зарегистрированы');
 

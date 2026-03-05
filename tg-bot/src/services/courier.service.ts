@@ -5,6 +5,7 @@ import { validatePhoneNumber, formatPhoneNumber } from '../validators/phone.vali
 import { extractUserDataFromMessage } from '../utils/telegram.utils';
 import { getDatabase } from '../config/database';
 import { WarehouseService } from './warehouse.service'; // Импорт сервиса складов
+import { SessionRepository } from '../repositories/session.repository'; // проверка активной сессии
 
 export interface CourierCheckResult {
     exists: boolean;
@@ -70,6 +71,16 @@ export class CourierService {
         return await this.repository.findAllActive();
     }
 
+    // Получить активных курьеров, которым ещё не отправлено уведомление
+    async getActiveNotNotifiedCouriers(): Promise<CourierFromDB[]> {
+        return await this.repository.findActiveNotNotified();
+    }
+
+    // Отметить курьера как уведомлённого
+    async markNotified(courierId: number): Promise<void> {
+        await this.repository.updateNotifiedAt(courierId);
+    }
+
     // Регистрация нового курьера
     async registerCourier(data: {
         fullName: string;
@@ -118,7 +129,7 @@ export class CourierService {
     // --- Новый метод: прикрепление курьера к складу ---
     async assignWarehouse(
         telegramId: number,
-        warehouseId: number,
+        warehouseId: number | null,
         warehouseService: WarehouseService
     ): Promise<{ success: boolean; message?: string; courier?: CourierFromDB }> {
 
@@ -133,10 +144,19 @@ export class CourierService {
 
         const courier = check.courier;
 
-        // 2. Проверка выбранного склада
-        const isValidWarehouse = await warehouseService.validateWarehouseIsActive(warehouseId);
-        if (!isValidWarehouse) {
-            return { success: false, message: 'Выбранный склад не существует или не активен' };
+        // Запрет на смену склада, если у курьера есть активная сессия
+        const sessionRepo = new SessionRepository();
+        const hasActive = !!(await sessionRepo.findActiveByCourier(courier.id));
+        if (hasActive) {
+            return { success: false, message: 'У вас есть активная сессия, сначала сдайте СИМ' };
+        }
+
+        // 2. Проверка выбранного склада (только если warehouseId не null)
+        if (warehouseId !== null) {
+            const isValidWarehouse = await warehouseService.validateWarehouseIsActive(warehouseId);
+            if (!isValidWarehouse) {
+                return { success: false, message: 'Выбранный склад не существует или не активен' };
+            }
         }
 
         // 3. Обновление склада в БД
@@ -146,6 +166,36 @@ export class CourierService {
         }
 
         // 4. Возврат результата
+        return { success: true, courier: updatedCourier };
+    }
+
+    // --- Новый метод: отвязание курьера от склада ---
+    async clearWarehouse(telegramId: number): Promise<{ success: boolean; message?: string; courier?: CourierFromDB }> {
+        // 1. Проверка существования курьера
+        const check = await this.checkCourierExists(telegramId);
+        if (!check.exists || !check.courier) {
+            return { success: false, message: 'Курьер не найден' };
+        }
+        if (!check.isActive) {
+            return { success: false, message: 'Курьер не активирован администратором' };
+        }
+
+        const courier = check.courier;
+
+        // Запрет на отвязку, если у курьера есть активная сессия
+        const sessionRepo = new SessionRepository();
+        const hasActive = !!(await sessionRepo.findActiveByCourier(courier.id));
+        if (hasActive) {
+            return { success: false, message: 'У вас есть активная сессия, сначала сдайте СИМ' };
+        }
+
+        // 2. Обновление склада на NULL в БД
+        const updatedCourier = await this.repository.updateWarehouse(courier.id, null);
+        if (!updatedCourier) {
+            return { success: false, message: 'Не удалось отвязаться от склада' };
+        }
+
+        // 3. Возврат результата
         return { success: true, courier: updatedCourier };
     }
 }

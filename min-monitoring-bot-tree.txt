@@ -1,0 +1,74 @@
+min-monitoring-bot/
+├── db/                                # Директория с базой данных
+│   ├── docker-compose.yml              # Запуск PostgreSQL в Docker
+│   ├── init.sql                        # SQL-скрипт инициализации таблиц и начальных данных
+│   └── readme.md                       # Документация по структуре БД
+│
+├── min-monitoring-bot-tree.txt         # Текстовая версия структуры проекта
+├── readme.md                           # Основная документация проекта
+│
+└── tg-bot/                             # Telegram-бот
+    ├── .env                            # Переменные окружения (локально, не в Git)
+    ├── .env.example                    # Пример переменных окружения
+    ├── .gitignore                       # Исключения для Git
+    ├── Dockerfile                        # Dockerfile для сборки бота
+    ├── package-lock.json                 # Lock-файл зависимостей
+    ├── package.json                      # Зависимости и npm-скрипты
+    ├── tsconfig.json                     # Конфигурация TypeScript
+    │
+    └── src/                              # Исходный код приложения
+        │
+        ├── index.ts                      # Точка входа (запуск БД, сервера и Telegram-бота)
+        │
+        ├── bot/                          # Логика Telegram-бота
+        │   ├── index.ts                  # Создание экземпляра бота
+        │   ├── init.ts                   # Инициализация зависимостей и регистрация команд/middleware
+        │   │
+        │   ├── commands/                 # Обработчики Telegram-команд
+        │   │   ├── index.ts              # Регистрация всех команд (/start, /set_warehouse, /clear_warehouse, /cancel и др.)
+        │   │   ├── start.ts              # Команда /start (регистрация курьера)
+        │   │   ├── set-warehouse.ts      # Команда /set_warehouse (выбор и прикрепление к складу, блокируется при активной сессии)
+        │   │   ├── clear-warehouse.ts    # Команда /clear_warehouse (отвязка от всех складов)
+        │   │   ├── take-sim.ts           # Команда /take_sim (взятие СИМ, создание сессии)
+        │   │   ├── return-sim.ts         # Команда /return_sim (сдача СИМ, диалог о повреждениях)
+        │   │   └── cancel.ts             # Команда /cancel (отмена текущего действия)
+        │   │
+        │   ├── handlers/                 # Обработчики диалоговых процессов
+        │   │   └── registration.handler.ts  # Логика пошаговой регистрации (имя → телефон)
+        │   │
+        │   ├── middlewares/              # Middleware для управления состояниями пользователя
+        │   │   ├── index.ts
+        │   │   ├── registration-state.middleware.ts  # Контроль процесса регистрации
+        │   │   └── state-manager.ts       # Централизованный менеджер состояний пользователей
+        │   │
+        │   └── keyboards/                # Telegram-клавиатуры (пока не используются)
+        │
+        ├── config/                       # Конфигурация приложения
+        │   └── database.ts               # Инициализация и управление подключением к PostgreSQL
+        │
+        ├── constants/                    # Константы и перечисления
+        │   ├── commands.constant.ts      # Список поддерживаемых команд бота (/start, /set_warehouse, /clear_warehouse, /take_sim, /return_sim, /cancel)
+        │   └── states.constant.ts        # Состояния (регистрация, выбор склада, взятие/сдача СИМ)
+        │
+        ├── repositories/                 # Репозитории для работы с БД
+        │   ├── courier.repository.ts     # Методы для работы с таблицей couriers
+        │   ├── mobility-device.repository.ts  # Методы для работы с таблицей mobility_devices
+        │   ├── session.repository.ts     # Методы для работы с таблицей session
+        │   ├── warehouse.repository.ts   # Методы для работы с таблицей warehouses
+        │   └── types/
+        │       └── warehouse.type.ts     # Типы для складов
+        │
+        ├── server/                       # HTTP-сервер для health checks
+        │   └── index.ts                  # Express-сервер с эндпоинтом /health
+        │
+        ├── services/                     # Бизнес-логика приложения
+        │   ├── activation-notifier.service.ts  # Уведомления об активации курьеров
+        │   ├── courier.service.ts        # Логика работы с курьерами (регистрация, проверка, прикрепление к складу)
+        │   ├── session.service.ts        # Управление сессиями курьеров
+        │   ├── warehouse.service.ts      # Работа со складами
+        │   └── types/                    # Типы для сервисов (пока пусто)
+        │
+        └── utils/                        # Вспомогательные функции
+            ├── telegram.utils.ts         # Утилиты для работы с Telegram API
+            └── validators/
+                └── phone.validator.ts    # Валидация телефонных номеров

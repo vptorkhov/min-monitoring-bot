@@ -1,6 +1,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { CourierService } from '../../services/courier.service';
 import { WarehouseService } from '../../services/warehouse.service';
+import { SessionService } from '../../services/session.service';
 import { stateManager } from '../state-manager';
 import { WarehouseState } from '../../constants/states.constant';
 import { Warehouse } from '../../repositories/types/warehouse.type';
@@ -29,6 +30,14 @@ export function registerSetWarehouseCommand(
         }
         if (!check.isActive) {
             await bot.sendMessage(chatId, '❌ Ваша регистрация еще не подтверждена администратором.');
+            return;
+        }
+
+        // запрет на смену, если есть активная сессия
+        const sessionService = new SessionService();
+        const hasSession = await sessionService.hasActiveSession(telegramId);
+        if (hasSession) {
+            await bot.sendMessage(chatId, '❌ У вас есть активная сессия. Сначала сдайте СИМ.');
             return;
         }
 
@@ -71,6 +80,15 @@ export function registerSetWarehouseCommand(
         }
 
         const index = parseInt(text, 10) - 1;
+
+        // перед применением снова проверим, не появилась ли активная сессия
+        const sessionService = new SessionService();
+        const hasSession = await sessionService.hasActiveSession(telegramId);
+        if (hasSession) {
+            await bot.sendMessage(chatId, '❌ У вас есть активная сессия. Сначала сдайте СИМ.');
+            stateManager.clearUser(telegramId);
+            return;
+        }
 
         const tempData = stateManager.getUserTempData<{ warehouses: Warehouse[] }>(telegramId);
         const warehouses = tempData?.warehouses;

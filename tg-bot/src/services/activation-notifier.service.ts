@@ -5,19 +5,17 @@ import { CourierService } from './courier.service';
  * Фоновый воркер, который отслеживает появление новых активированных
  * курьеров и мгновенно шлёт им уведомления.
  *
- * Хранит в памяти Set telegramId, чтобы не слать повторно. Это означает,
- * что после перезапуска бота часть уведомлений может быть отправлена
- * повторно или пропущена; в scope текущего проекта это приемлемо.
+ * Использует поле notified_at в БД для отслеживания отправленных уведомлений,
+ * что позволяет корректно работать после перезапуска бота.
  */
 export class ActivationNotifier {
-    private notified = new Set<number>();
     private intervalId: NodeJS.Timeout | null = null;
 
     constructor(
         private bot: TelegramBot,
         private courierService: CourierService,
         private pollIntervalMs = 30_000 // по умолчанию каждые 30 секунд
-    ) {}
+    ) { }
 
     start() {
         if (this.intervalId) return; // уже запущен
@@ -36,18 +34,16 @@ export class ActivationNotifier {
     }
 
     private async checkAndNotify() {
-        const couriers = await this.courierService.getActiveCouriers();
+        const couriers = await this.courierService.getActiveNotNotifiedCouriers();
         for (const c of couriers) {
-            if (!this.notified.has(c.telegram_id)) {
-                try {
-                    await this.bot.sendMessage(
-                        c.telegram_id,
-                        '✅ Ваша учетная запись активирована! Добро пожаловать.'
-                    );
-                    this.notified.add(c.telegram_id);
-                } catch (err) {
-                    console.error('Failed to notify courier', c.telegram_id, err);
-                }
+            try {
+                await this.bot.sendMessage(
+                    c.telegram_id,
+                    '✅ Ваша учетная запись активирована! Добро пожаловать.'
+                );
+                await this.courierService.markNotified(c.id);
+            } catch (err) {
+                console.error('Failed to notify courier', c.telegram_id, err);
             }
         }
     }
