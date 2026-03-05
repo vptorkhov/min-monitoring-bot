@@ -1,5 +1,7 @@
 // src/utils/telegram.utils.ts
 
+import { KEYBOARD_BUTTON_TEXT } from '../bot/keyboards/registration.keyboard';
+
 // Интерфейс для данных пользователя из Telegram
 export interface TelegramUserData {
     telegramId: number;
@@ -26,4 +28,21 @@ export function formatErrorMessage(error: string): string {
 // Форматирование успешного сообщения
 export function formatSuccessMessage(message: string): string {
     return `✅ ${message}`;
+}
+
+/**
+ * Преобразование текста кнопки клавиатуры в команду
+ * Например: "❌ Отмена" → "/cancel"
+ * @param buttonText - текст кнопки
+ * @returns команда (с /) или оригинальный текст если это не кнопка
+ */
+export function convertKeyboardButtonToCommand(buttonText: string): string {
+    switch (buttonText) {
+        case KEYBOARD_BUTTON_TEXT.START:
+            return '/start';
+        case KEYBOARD_BUTTON_TEXT.CANCEL:
+            return '/cancel';
+        default:
+            return buttonText;
+    }
 }
