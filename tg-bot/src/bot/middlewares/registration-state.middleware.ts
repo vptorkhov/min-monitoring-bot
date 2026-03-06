@@ -3,6 +3,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { RegistrationHandler } from '../handlers/registration.handler';
 import { isCommand } from '../../constants/commands.constant';
+import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
 
 /**
  * Middleware для проверки состояния регистрации пользователя.
@@ -32,7 +33,12 @@ export function createRegistrationStateMiddleware(
         }
 
         const userId = msg.from.id;
-        const text = msg.text;
+        let text = msg.text;
+
+        // Преобразуем текст кнопки клавиатуры в команду если нужно
+        if (text) {
+            text = convertKeyboardButtonToCommand(text);
+        }
 
         // Проверяем, находится ли пользователь в процессе регистрации
         const isInRegistration = registrationHandler.isUserInRegistration(userId);

@@ -1,5 +1,9 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { CourierService } from './courier.service';
+import {
+    getSelectWarehouseKeyboard,
+    KEYBOARD_BUTTON_TEXT
+} from '../bot/keyboards/registration.keyboard';
 
 /**
  * Фоновый воркер, который отслеживает появление новых активированных
@@ -37,10 +41,32 @@ export class ActivationNotifier {
         const couriers = await this.courierService.getActiveNotNotifiedCouriers();
         for (const c of couriers) {
             try {
+                // Отправляем сообщение об активации с inline-кнопкой
                 await this.bot.sendMessage(
                     c.telegram_id,
-                    '✅ Ваша учетная запись активирована! Добро пожаловать.'
+                    '✅ Ваша учетная запись активирована! Добро пожаловать.',
+                    {
+                        reply_markup: {
+                            inline_keyboard: [
+                                [
+                                    {
+                                        text: KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE,
+                                        callback_data: 'set_warehouse'
+                                    }
+                                ]
+                            ]
+                        }
+                    }
                 );
+
+                // Отправляем reply-клавиатуру с кнопкой выбора склада
+                await this.bot.sendMessage(
+                    c.telegram_id,
+                    'Пожалуйста, выберите склад:',
+                    { reply_markup: getSelectWarehouseKeyboard() }
+                );
+
+                // Отмечаем пользователя как уведомленного
                 await this.courierService.markNotified(c.id);
             } catch (err) {
                 console.error('Failed to notify courier', c.telegram_id, err);

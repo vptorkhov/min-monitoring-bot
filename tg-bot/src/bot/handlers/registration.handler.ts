@@ -6,6 +6,7 @@ import { RegistrationState } from '../../constants/states.constant';
 import { isCommand } from '../../constants/commands.constant';
 import { formatErrorMessage, formatSuccessMessage } from '../../utils/telegram.utils';
 import { stateManager } from '../state-manager';
+import { getCancelKeyboard } from '../keyboards/registration.keyboard';
 
 export class RegistrationHandler {
     constructor(
@@ -25,7 +26,7 @@ export class RegistrationHandler {
         await this.bot.sendMessage(
             chatId,
             '📝 Давайте зарегистрируем вас.\n\nПожалуйста, введите ваше полное имя:',
-            { reply_markup: { force_reply: true } }
+            { reply_markup: getCancelKeyboard() }
         );
     }
 
@@ -81,7 +82,7 @@ export class RegistrationHandler {
             await this.bot.sendMessage(
                 chatId,
                 formatErrorMessage('Имя должно содержать минимум 2 символа. Попробуйте снова:'),
-                { reply_markup: { force_reply: true } }
+                { reply_markup: getCancelKeyboard() }
             );
             return;
         }
@@ -90,7 +91,7 @@ export class RegistrationHandler {
             await this.bot.sendMessage(
                 chatId,
                 formatErrorMessage('Имя не может быть длиннее 100 символов. Пожалуйста, сократите:'),
-                { reply_markup: { force_reply: true } }
+                { reply_markup: getCancelKeyboard() }
             );
             return;
         }
@@ -101,7 +102,7 @@ export class RegistrationHandler {
         await this.bot.sendMessage(
             chatId,
             '📞 Теперь введите ваш номер телефона (например, +79001234567):\n\n',
-            { reply_markup: { force_reply: true } }
+            { reply_markup: getCancelKeyboard() }
         );
     }
 
@@ -115,7 +116,7 @@ export class RegistrationHandler {
             await this.bot.sendMessage(
                 chatId,
                 formatErrorMessage(validation.error || 'Некорректный формат номера. Попробуйте снова:'),
-                { reply_markup: { force_reply: true } }
+                { reply_markup: getCancelKeyboard() }
             );
             return;
         }

@@ -28,17 +28,17 @@ export function registerAllCommands(
 ) {
     console.log('📝 Регистрация команд бота...');
 
-    // Регистрируем только существующие команды
-    registerStartCommand(bot, courierService, registrationHandler);
-    // Регистрируем команду /cancel
-    registerCancelCommand(bot, registrationHandler);
-    // Создаём репозиторий и сервис складов
-    const warehouseRepository = new WarehouseRepository();
-    const warehouseService = new WarehouseService(warehouseRepository);
-
     // Сессия и устройства
     const sessionService = new SessionService(courierService);
     const deviceRepository = new MobilityDeviceRepository();
+
+    // Регистрируем только существующие команды
+    registerStartCommand(bot, courierService, registrationHandler, sessionService);
+    // Регистрируем команду /cancel
+    registerCancelCommand(bot, registrationHandler, courierService, sessionService);
+    // Создаём репозиторий и сервис складов
+    const warehouseRepository = new WarehouseRepository();
+    const warehouseService = new WarehouseService(warehouseRepository);
 
     // Регистрируем команду /set_warehouse
     registerSetWarehouseCommand(bot, courierService, warehouseService);

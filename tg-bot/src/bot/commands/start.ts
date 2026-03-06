@@ -3,11 +3,18 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { RegistrationHandler } from '../handlers/registration.handler';
 import { CourierService } from '../../services/courier.service';
+import { SessionService } from '../../services/session.service';
+import {
+    getCourierActiveSessionKeyboard,
+    getCourierIdleKeyboard,
+    getSelectWarehouseKeyboard
+} from '../keyboards/registration.keyboard';
 
 export function registerStartCommand(
     bot: TelegramBot,
     courierService: CourierService,
-    registrationHandler: RegistrationHandler
+    registrationHandler: RegistrationHandler,
+    sessionService: SessionService
 ) {
     bot.onText(/\/start/, async (msg) => {
         const chatId = msg.chat.id;
@@ -54,14 +61,27 @@ export function registerStartCommand(
                 return;
             }
 
-            // Курьер активен - приветствуем
-            const greeting = `С возвращением, ${courier.full_name}!`;
+            // Курьер активен - приветствуем и показываем релевантную клавиатуру.
+            const greeting = `👋 С возвращением, ${courier.full_name}!\n\nДобро пожаловать в Мониторинг СИМ.`;
+            const hasActiveSession = await sessionService.hasActiveSession(userId);
 
-            await bot.sendMessage(
-                chatId,
-                `👋 ${greeting}\n\n` +
-                'Добро пожаловать в Мониторинг СИМ.\n\n'
-            );
+            if (hasActiveSession) {
+                await bot.sendMessage(chatId, `${greeting}\n\nУ вас активная сессия. Используйте кнопку ниже для сдачи СИМ:`, {
+                    reply_markup: getCourierActiveSessionKeyboard()
+                });
+                return;
+            }
+
+            if (!courier.warehouse_id) {
+                await bot.sendMessage(chatId, `${greeting}\n\nПожалуйста, выберите склад:`, {
+                    reply_markup: getSelectWarehouseKeyboard()
+                });
+                return;
+            }
+
+            await bot.sendMessage(chatId, `${greeting}\n\nВыберите действие:`, {
+                reply_markup: getCourierIdleKeyboard()
+            });
 
         } catch (error) {
             console.error('Ошибка в обработчике /start:', error);
