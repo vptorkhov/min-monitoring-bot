@@ -6,8 +6,16 @@ import { SessionService, DamageType } from '../../services/session.service';
 import { stateManager } from '../state-manager';
 import { DeviceSessionState } from '../../constants/states.constant';
 import { isCommand } from '../../constants/commands.constant';
-import { getCourierIdleKeyboard } from '../keyboards/registration.keyboard';
+import {
+    getCourierIdleKeyboard,
+    getReturnSimDamageQuestionKeyboard,
+    getReturnSimDamageQuestionInlineKeyboard,
+    getReturnSimDamageTypeInlineKeyboard,
+    getReturnSimDamageTypeKeyboard
+} from '../keyboards/registration.keyboard';
 import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
+import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
+import { INLINE_CALLBACK_DATA } from '../keyboards/registration.keyboard';
 
 const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
     remove_keyboard: true
@@ -59,6 +67,48 @@ export function registerReturnSimCommand(
         });
     };
 
+    const handleReturnAskDamageDecision = async (
+        chatId: number,
+        telegramId: number,
+        yn: 'yes' | 'no'
+    ) => {
+        if (yn === 'no') {
+            const result = await sessionService.endSession(telegramId, { type: 'ok' });
+            if (result.success) {
+                await bot.sendMessage(chatId, '✅ Сессия завершена. Спасибо.');
+                await sendIdleKeyboardIfEligible(chatId, telegramId);
+            } else {
+                await bot.sendMessage(chatId, `❌ Ошибка: ${result.error}`);
+            }
+            stateManager.clearUser(telegramId);
+            return;
+        }
+
+        await bot.sendMessage(
+            chatId,
+            'Выберите тип повреждения:\n1. Слабое\n2. Критическое',
+            { reply_markup: getReturnSimDamageTypeInlineKeyboard() }
+        );
+
+        await bot.sendMessage(chatId, 'Или используйте reply-клавиатуру ниже:', {
+            reply_markup: getReturnSimDamageTypeKeyboard()
+        });
+
+        stateManager.setUserState(telegramId, DeviceSessionState.RETURN_DAMAGE_TYPE);
+    };
+
+    const handleReturnDamageTypeDecision = async (
+        chatId: number,
+        telegramId: number,
+        dtype: DamageType
+    ) => {
+        stateManager.setUserTempDataField(telegramId, 'damageType', dtype);
+        await bot.sendMessage(chatId, 'Опишите повреждения:', {
+            reply_markup: HIDE_REPLY_KEYBOARD
+        });
+        stateManager.setUserState(telegramId, DeviceSessionState.RETURN_DESCRIPTION);
+    };
+
     const startReturnSimFlow = async (chatId: number, telegramId: number) => {
         const check = await courierService.checkCourierExists(telegramId);
         if (!check.exists) {
@@ -95,8 +145,13 @@ export function registerReturnSimCommand(
         await bot.sendMessage(
             chatId,
             'Есть ли повреждение у СИМ?\n1. Нет\n2. Да',
-            { reply_markup: HIDE_REPLY_KEYBOARD }
+            { reply_markup: getReturnSimDamageQuestionInlineKeyboard() }
         );
+
+        await bot.sendMessage(chatId, 'Или используйте reply-клавиатуру ниже:', {
+            reply_markup: getReturnSimDamageQuestionKeyboard()
+        });
+
         stateManager.setUserState(telegramId, DeviceSessionState.RETURN_ASK_DAMAGE);
     };
 
@@ -109,6 +164,56 @@ export function registerReturnSimCommand(
         await startReturnSimFlow(chatId, telegramId);
     });
 
+    bot.on('callback_query', async (query) => {
+        const callbackData = query.data;
+        if (
+            callbackData !== INLINE_CALLBACK_DATA.RETURN_DAMAGE_NO &&
+            callbackData !== INLINE_CALLBACK_DATA.RETURN_DAMAGE_YES &&
+            callbackData !== INLINE_CALLBACK_DATA.RETURN_DAMAGE_WEAK &&
+            callbackData !== INLINE_CALLBACK_DATA.RETURN_DAMAGE_CRITICAL
+        ) {
+            return;
+        }
+
+        const chatId = query.message?.chat.id;
+        const telegramId = query.from.id;
+        if (!chatId) {
+            return;
+        }
+
+        await bot.answerCallbackQuery(query.id);
+
+        const state = stateManager.getUserState(telegramId);
+
+        if (
+            callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_NO ||
+            callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_YES
+        ) {
+            if (state !== DeviceSessionState.RETURN_ASK_DAMAGE) {
+                await bot.sendMessage(chatId, 'ℹ️ Сначала запустите сдачу СИМ командой /return_sim.');
+                return;
+            }
+
+            const answerText = callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_NO ? 'Нет' : 'Да';
+            await bot.sendMessage(chatId, answerText);
+
+            const yn: 'yes' | 'no' = callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_NO ? 'no' : 'yes';
+            await handleReturnAskDamageDecision(chatId, telegramId, yn);
+            return;
+        }
+
+        if (state !== DeviceSessionState.RETURN_DAMAGE_TYPE) {
+            await bot.sendMessage(chatId, 'ℹ️ Сначала выберите, есть ли повреждение у СИМ.');
+            return;
+        }
+
+        const damageTypeText = callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_WEAK ? 'Слабое' : 'Критическое';
+        await bot.sendMessage(chatId, damageTypeText);
+
+        const dtype: DamageType = callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_WEAK ? 'warning' : 'broken';
+        await handleReturnDamageTypeDecision(chatId, telegramId, dtype);
+    });
+
     // последующие шаги — общий обработчик сообщений
     bot.on('message', async (msg) => {
         const chatId = msg.chat.id;
@@ -117,13 +222,22 @@ export function registerReturnSimCommand(
 
         const textAsCommand = convertKeyboardButtonToCommand(msg.text || '');
         if (textAsCommand === '/return_sim' && (msg.text || '') !== '/return_sim') {
-            await bot.sendMessage(chatId, '/return_sim');
             await startReturnSimFlow(chatId, telegramId);
             return;
         }
 
         const state = stateManager.getUserState(telegramId);
         if (!state) return;
+
+        if (textAsCommand === '/cancel' && (msg.text || '') !== '/cancel') {
+            stateManager.clearUser(telegramId);
+            await bot.sendMessage(chatId, '❌ Действие отменено.', {
+                reply_markup: HIDE_REPLY_KEYBOARD
+            });
+            await sendCourierMainKeyboard(bot, chatId, telegramId, courierService, sessionService);
+            return;
+        }
+
         if (isCommand(msg.text || '')) return; // команды игнорируем
 
         const text = msg.text || '';
@@ -135,24 +249,7 @@ export function registerReturnSimCommand(
                     await bot.sendMessage(chatId, 'Пожалуйста, выберите 1 (Нет) или 2 (Да).');
                     return;
                 }
-                if (yn === 'no') {
-                    // просто закрываем
-                    const result = await sessionService.endSession(telegramId, { type: 'ok' });
-                    if (result.success) {
-                        await bot.sendMessage(chatId, '✅ Сессия завершена. Спасибо.');
-                        await sendIdleKeyboardIfEligible(chatId, telegramId);
-                    } else {
-                        await bot.sendMessage(chatId, `❌ Ошибка: ${result.error}`);
-                    }
-                    stateManager.clearUser(telegramId);
-                    return;
-                }
-                // да — спрашиваем тип повреждения
-                await bot.sendMessage(
-                    chatId,
-                    'Выберите тип повреждения:\n1. Слабое\n2. Критическое'
-                );
-                stateManager.setUserState(telegramId, DeviceSessionState.RETURN_DAMAGE_TYPE);
+                await handleReturnAskDamageDecision(chatId, telegramId, yn);
                 return;
             }
 
@@ -162,10 +259,7 @@ export function registerReturnSimCommand(
                     await bot.sendMessage(chatId, 'Пожалуйста, выберите 1 или 2 (слабое/критическое).');
                     return;
                 }
-                // сохраняем выбранный тип
-                stateManager.setUserTempDataField(telegramId, 'damageType', dtype);
-                await bot.sendMessage(chatId, 'Опишите повреждения:');
-                stateManager.setUserState(telegramId, DeviceSessionState.RETURN_DESCRIPTION);
+                await handleReturnDamageTypeDecision(chatId, telegramId, dtype);
                 return;
             }
 
