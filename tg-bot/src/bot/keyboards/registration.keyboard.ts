@@ -20,7 +20,8 @@ export const LEGACY_KEYBOARD_BUTTON_TEXT = {
 export const INLINE_CALLBACK_DATA = {
     TAKE_SIM: 'take_sim',
     SET_WAREHOUSE: 'set_warehouse',
-    CLEAR_WAREHOUSE: 'clear_warehouse'
+    CLEAR_WAREHOUSE: 'clear_warehouse',
+    TAKE_SIM_SELECT_PREFIX: 'take_sim_select_'
 } as const;
 
 /**
@@ -118,5 +119,59 @@ export const getWarehouseNumberSelectionKeyboard = (
         ],
         resize_keyboard: true,
         one_time_keyboard: false
+    };
+};
+
+/**
+ * Reply-клавиатура выбора СИМ по номеру в /take_sim.
+ * Порядок кнопок: сначала отмена, затем номера 1..N.
+ */
+export const getTakeSimNumberSelectionKeyboard = (
+    deviceCount: number
+): TelegramBot.ReplyKeyboardMarkup => {
+    const numberButtons: TelegramBot.KeyboardButton[] = Array.from(
+        { length: deviceCount },
+        (_, index) => ({ text: String(index + 1) })
+    );
+
+    const chunkSize = 5;
+    const rows: TelegramBot.KeyboardButton[][] = [];
+    for (let i = 0; i < numberButtons.length; i += chunkSize) {
+        rows.push(numberButtons.slice(i, i + chunkSize));
+    }
+
+    return {
+        keyboard: [
+            [{ text: KEYBOARD_BUTTON_TEXT.CANCEL }],
+            ...rows
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: false
+    };
+};
+
+/**
+ * Inline-клавиатура выбора СИМ по номеру в /take_sim.
+ * Содержит кнопки 1..N (по количеству СИМ в списке).
+ */
+export const getTakeSimNumberSelectionInlineKeyboard = (
+    deviceCount: number
+): TelegramBot.InlineKeyboardMarkup => {
+    const buttons: TelegramBot.InlineKeyboardButton[] = Array.from(
+        { length: deviceCount },
+        (_, index) => ({
+            text: String(index + 1),
+            callback_data: `${INLINE_CALLBACK_DATA.TAKE_SIM_SELECT_PREFIX}${index + 1}`
+        })
+    );
+
+    const chunkSize = 5;
+    const rows: TelegramBot.InlineKeyboardButton[][] = [];
+    for (let i = 0; i < buttons.length; i += chunkSize) {
+        rows.push(buttons.slice(i, i + chunkSize));
+    }
+
+    return {
+        inline_keyboard: rows
     };
 };
