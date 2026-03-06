@@ -8,8 +8,10 @@ import { Warehouse } from '../../repositories/types/warehouse.type';
 import { isCommand } from '../../constants/commands.constant';
 import {
     KEYBOARD_BUTTON_TEXT,
+    getCourierIdleKeyboard,
     getWarehouseNumberSelectionKeyboard
 } from '../keyboards/registration.keyboard';
+import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
 
 /**
  * Команда /set_warehouse
@@ -89,6 +91,10 @@ export function registerSetWarehouseCommand(
         } else {
             await bot.sendMessage(chatId, `✅ Вы успешно прикрепились к складу: ${selectedWarehouse.name}`, {
                 reply_markup: HIDE_REPLY_KEYBOARD
+            });
+
+            await bot.sendMessage(chatId, 'Выберите действие:', {
+                reply_markup: getCourierIdleKeyboard()
             });
         }
 
@@ -197,9 +203,11 @@ export function registerSetWarehouseCommand(
         if (!telegramId) return;
 
         const text = msg.text?.trim();
+        const textAsCommand = text ? convertKeyboardButtonToCommand(text) : '';
 
-        // Перехват reply-кнопки "🏠Выбрать склад" как эквивалента /set_warehouse
-        if (text === KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE) {
+        // Перехват reply-кнопки выбора склада как эквивалента /set_warehouse.
+        // Поддерживаем оба текста: новый и исторический без пробела.
+        if (textAsCommand === '/set_warehouse' && text !== '/set_warehouse') {
             await startWarehouseSelection(chatId, telegramId);
             return;
         }

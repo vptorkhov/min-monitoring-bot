@@ -6,6 +6,13 @@ import TelegramBot from 'node-telegram-bot-api';
 export const KEYBOARD_BUTTON_TEXT = {
     START: '✔️ Старт',
     CANCEL: '❌ Отмена',
+    SELECT_WAREHOUSE: '🏠 Выбрать склад',
+    TAKE_SIM: '🚲 Взять СИМ',
+    CLEAR_WAREHOUSE: '❌🏠 Отвязаться от склада'
+} as const;
+
+// Исторический текст кнопки выбора склада (без пробела).
+export const LEGACY_KEYBOARD_BUTTON_TEXT = {
     SELECT_WAREHOUSE: '🏠Выбрать склад'
 } as const;
 
@@ -45,6 +52,21 @@ export const getSelectWarehouseKeyboard = (): TelegramBot.ReplyKeyboardMarkup =>
     return {
         keyboard: [
             [{ text: KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE }]
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: false
+    };
+};
+
+/**
+ * Основная клавиатура активного курьера без активной сессии.
+ */
+export const getCourierIdleKeyboard = (): TelegramBot.ReplyKeyboardMarkup => {
+    return {
+        keyboard: [
+            [{ text: KEYBOARD_BUTTON_TEXT.TAKE_SIM }],
+            [{ text: KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE }],
+            [{ text: KEYBOARD_BUTTON_TEXT.CLEAR_WAREHOUSE }]
         ],
         resize_keyboard: true,
         one_time_keyboard: false

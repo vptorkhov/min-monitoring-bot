@@ -131,6 +131,7 @@ min-monitoring-bot/
 - [`src/bot/README.md`](tg-bot/src/bot/README.md) — основная логика Telegram-бота
 - [`src/bot/commands/README.md`](tg-bot/src/bot/commands/README.md) — обработчики команд бота
 - [`src/bot/handlers/README.md`](tg-bot/src/bot/handlers/README.md) — обработчики диалоговых процессов
+- [`src/bot/keyboards/README.md`](tg-bot/src/bot/keyboards/README.md) — reply-клавиатуры и сценарии выбора склада
 - [`src/bot/middlewares/README.md`](tg-bot/src/bot/middlewares/README.md) — middleware для управления состояниями
 - [`src/config/README.md`](tg-bot/src/config/README.md) — конфигурация приложения
 - [`src/constants/README.md`](tg-bot/src/constants/README.md) — константы и перечисления
@@ -140,6 +141,10 @@ min-monitoring-bot/
 - [`src/services/README.md`](tg-bot/src/services/README.md) — бизнес-логика приложения
 - [`src/utils/README.md`](tg-bot/src/utils/README.md) — вспомогательные функции
 - [`src/validators/README.md`](tg-bot/src/validators/README.md) — валидация данных
+
+Дополнительно:
+
+- [`db/readme.md`](db/readme.md) — структура БД, таблицы, связи и начальные данные
 
 ## ✨ Функциональность
 

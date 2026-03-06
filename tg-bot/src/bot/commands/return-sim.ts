@@ -6,6 +6,11 @@ import { SessionService, DamageType } from '../../services/session.service';
 import { stateManager } from '../state-manager';
 import { DeviceSessionState } from '../../constants/states.constant';
 import { isCommand } from '../../constants/commands.constant';
+import { getCourierIdleKeyboard } from '../keyboards/registration.keyboard';
+
+const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
+    remove_keyboard: true
+};
 
 // вспомогательные функции
 function normalizeAnswer(answer: string): string {
@@ -37,6 +42,22 @@ export function registerReturnSimCommand(
     courierService: CourierService,
     sessionService: SessionService
 ) {
+    const sendIdleKeyboardIfEligible = async (chatId: number, telegramId: number) => {
+        const check = await courierService.checkCourierExists(telegramId);
+        if (!check.exists || !check.isActive || !check.courier?.warehouse_id) {
+            return;
+        }
+
+        const hasSession = await sessionService.hasActiveSession(telegramId);
+        if (hasSession) {
+            return;
+        }
+
+        await bot.sendMessage(chatId, 'Выберите действие:', {
+            reply_markup: getCourierIdleKeyboard()
+        });
+    };
+
     // Команда запуска процесса сдачи
     bot.onText(/\/return_sim/, async (msg) => {
         const chatId = msg.chat.id;
@@ -64,7 +85,10 @@ export function registerReturnSimCommand(
         if (personal) {
             const result = await sessionService.endSession(telegramId, { type: 'ok' });
             if (result.success) {
-                await bot.sendMessage(chatId, '✅ Личный СИМ сдан, сессия завершена.');
+                await bot.sendMessage(chatId, '✅ Личный СИМ сдан, сессия завершена.', {
+                    reply_markup: HIDE_REPLY_KEYBOARD
+                });
+                await sendIdleKeyboardIfEligible(chatId, telegramId);
             } else {
                 await bot.sendMessage(chatId, `❌ Ошибка: ${result.error}`);
             }
@@ -74,7 +98,8 @@ export function registerReturnSimCommand(
         // Начинаем диалог
         await bot.sendMessage(
             chatId,
-            'Есть ли повреждение у СИМ?\n1. Нет\n2. Да'
+            'Есть ли повреждение у СИМ?\n1. Нет\n2. Да',
+            { reply_markup: HIDE_REPLY_KEYBOARD }
         );
         stateManager.setUserState(telegramId, DeviceSessionState.RETURN_ASK_DAMAGE);
     });
@@ -103,6 +128,7 @@ export function registerReturnSimCommand(
                     const result = await sessionService.endSession(telegramId, { type: 'ok' });
                     if (result.success) {
                         await bot.sendMessage(chatId, '✅ Сессия завершена. Спасибо.');
+                        await sendIdleKeyboardIfEligible(chatId, telegramId);
                     } else {
                         await bot.sendMessage(chatId, `❌ Ошибка: ${result.error}`);
                     }
@@ -145,6 +171,7 @@ export function registerReturnSimCommand(
                 });
                 if (result.success) {
                     await bot.sendMessage(chatId, '✅ Сессия завершена, спасибо за информацию.');
+                    await sendIdleKeyboardIfEligible(chatId, telegramId);
                 } else {
                     await bot.sendMessage(chatId, `❌ Ошибка: ${result.error}`);
                 }

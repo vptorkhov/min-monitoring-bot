@@ -1,6 +1,11 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { CourierService } from '../../services/courier.service';
 import { SessionService } from '../../services/session.service';
+import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
+
+const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
+    remove_keyboard: true
+};
 
 /**
  * Команда /clear_warehouse
@@ -10,11 +15,7 @@ export function registerClearWarehouseCommand(
     bot: TelegramBot,
     courierService: CourierService
 ) {
-    bot.onText(/\/clear_warehouse/, async (msg) => {
-        const chatId = msg.chat.id;
-        const telegramId = msg.from?.id;
-        if (!telegramId) return;
-
+    const clearWarehouseFlow = async (chatId: number, telegramId: number) => {
         // Проверка курьера
         const check = await courierService.checkCourierExists(telegramId);
         if (!check.exists) {
@@ -38,8 +39,33 @@ export function registerClearWarehouseCommand(
         const result = await courierService.clearWarehouse(telegramId);
         if (!result.success) {
             await bot.sendMessage(chatId, `❌ Не удалось отвязаться от склада: ${result.message}`);
-        } else {
-            await bot.sendMessage(chatId, '✅ Вы успешно отвязались от склада.');
+            return;
         }
+
+        await bot.sendMessage(chatId, '✅ Вы успешно отвязались от склада.', {
+            reply_markup: HIDE_REPLY_KEYBOARD
+        });
+    };
+
+    bot.onText(/\/clear_warehouse/, async (msg) => {
+        const chatId = msg.chat.id;
+        const telegramId = msg.from?.id;
+        if (!telegramId) return;
+
+        await clearWarehouseFlow(chatId, telegramId);
+    });
+
+    bot.on('message', async (msg) => {
+        const chatId = msg.chat.id;
+        const telegramId = msg.from?.id;
+        if (!telegramId) return;
+
+        const text = msg.text?.trim();
+        const textAsCommand = text ? convertKeyboardButtonToCommand(text) : '';
+        if (textAsCommand !== '/clear_warehouse' || text === '/clear_warehouse') {
+            return;
+        }
+
+        await clearWarehouseFlow(chatId, telegramId);
     });
 }

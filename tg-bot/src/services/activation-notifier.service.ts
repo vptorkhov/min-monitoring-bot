@@ -1,6 +1,9 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { CourierService } from './courier.service';
-import { getSelectWarehouseKeyboard } from '../bot/keyboards/registration.keyboard';
+import {
+    getSelectWarehouseKeyboard,
+    KEYBOARD_BUTTON_TEXT
+} from '../bot/keyboards/registration.keyboard';
 
 /**
  * Фоновый воркер, который отслеживает появление новых активированных
@@ -47,7 +50,7 @@ export class ActivationNotifier {
                             inline_keyboard: [
                                 [
                                     {
-                                        text: '🏠Выбрать склад',
+                                        text: KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE,
                                         callback_data: 'set_warehouse'
                                     }
                                 ]

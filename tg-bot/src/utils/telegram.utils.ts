@@ -1,6 +1,9 @@
 // src/utils/telegram.utils.ts
 
-import { KEYBOARD_BUTTON_TEXT } from '../bot/keyboards/registration.keyboard';
+import {
+    KEYBOARD_BUTTON_TEXT,
+    LEGACY_KEYBOARD_BUTTON_TEXT
+} from '../bot/keyboards/registration.keyboard';
 
 // Интерфейс для данных пользователя из Telegram
 export interface TelegramUserData {
@@ -43,7 +46,12 @@ export function convertKeyboardButtonToCommand(buttonText: string): string {
         case KEYBOARD_BUTTON_TEXT.CANCEL:
             return '/cancel';
         case KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE:
+        case LEGACY_KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE:
             return '/set_warehouse';
+        case KEYBOARD_BUTTON_TEXT.TAKE_SIM:
+            return '/take_sim';
+        case KEYBOARD_BUTTON_TEXT.CLEAR_WAREHOUSE:
+            return '/clear_warehouse';
         default:
             return buttonText;
     }
