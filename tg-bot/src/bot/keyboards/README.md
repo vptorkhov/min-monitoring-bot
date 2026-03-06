@@ -3,12 +3,13 @@
 ## Описание
 
 Содержит функции для создания встроенных reply-клавиатур Telegram бота.
+Inline-клавиатуры для выбора склада формируются в обработчике команды `set-warehouse.ts`.
 
 ## Файлы
 
 ### `registration.keyboard.ts`
 
-Клавиатуры для процесса регистрации:
+Клавиатуры для процесса регистрации и выбора склада:
 
 - **`getRegistrationStartKeyboard()`** - Клавиатура для начала регистрации
     - Содержит кнопку: `✔️ Старт`
@@ -16,6 +17,13 @@
 - **`getCancelKeyboard()`** - Клавиатура для отмены операции
     - Содержит кнопку: `❌ Отмена`
     - Используется при вводе имени и телефона
+- **`getSelectWarehouseKeyboard()`** - Клавиатура для перехода к выбору склада
+    - Содержит кнопку: `🏠Выбрать склад`
+    - Используется после активации учетной записи
+- **`getWarehouseNumberSelectionKeyboard(warehouseCount)`** - Клавиатура выбора склада по номеру
+    - Содержит кнопки `1..N` (по количеству доступных складов)
+    - Дополнительно содержит кнопку `❌ Отмена`
+    - Используется в процессе `/set_warehouse`
 
 ## Использование
 
@@ -23,11 +31,16 @@
 import {
 	getRegistrationStartKeyboard,
 	getCancelKeyboard,
+	getWarehouseNumberSelectionKeyboard,
 } from "../keyboards/registration.keyboard";
 
 // Отправка сообщения с клавиатурой
 await bot.sendMessage(chatId, "Введите имя:", {
 	reply_markup: getCancelKeyboard(),
+});
+
+await bot.sendMessage(chatId, "Выберите номер склада:", {
+	reply_markup: getWarehouseNumberSelectionKeyboard(3),
 });
 ```
 
@@ -58,3 +71,5 @@ await bot.sendMessage(chatId, "Введите имя:", {
 Клавиатуры используются в:
 
 - `registration.handler.ts` - обработчик регистрации
+- `activation-notifier.service.ts` - сообщение об активации и кнопка `🏠Выбрать склад`
+- `set-warehouse.ts` - выбор склада через reply-клавиатуру `1..N` + `❌ Отмена`

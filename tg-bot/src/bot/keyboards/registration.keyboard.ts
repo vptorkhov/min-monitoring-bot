@@ -50,3 +50,31 @@ export const getSelectWarehouseKeyboard = (): TelegramBot.ReplyKeyboardMarkup =>
         one_time_keyboard: false
     };
 };
+
+/**
+ * Клавиатура для выбора склада по номеру
+ * Содержит кнопки с номерами и кнопку отмены.
+ */
+export const getWarehouseNumberSelectionKeyboard = (
+    warehouseCount: number
+): TelegramBot.ReplyKeyboardMarkup => {
+    const numberButtons: TelegramBot.KeyboardButton[] = Array.from(
+        { length: warehouseCount },
+        (_, index) => ({ text: String(index + 1) })
+    );
+
+    const chunkSize = 5;
+    const rows: TelegramBot.KeyboardButton[][] = [];
+    for (let i = 0; i < numberButtons.length; i += chunkSize) {
+        rows.push(numberButtons.slice(i, i + chunkSize));
+    }
+
+    return {
+        keyboard: [
+            ...rows,
+            [{ text: KEYBOARD_BUTTON_TEXT.CANCEL }]
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: false
+    };
+};
