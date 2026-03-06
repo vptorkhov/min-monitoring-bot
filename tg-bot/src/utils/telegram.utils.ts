@@ -52,6 +52,8 @@ export function convertKeyboardButtonToCommand(buttonText: string): string {
             return '/take_sim';
         case KEYBOARD_BUTTON_TEXT.CLEAR_WAREHOUSE:
             return '/clear_warehouse';
+        case KEYBOARD_BUTTON_TEXT.RETURN_SIM:
+            return '/return_sim';
         default:
             return buttonText;
     }

@@ -59,6 +59,7 @@ export function registerTakeSimCommand(
         const label = device.is_personal ? 'Личный' : device.device_number || 'без номера';
         await bot.sendMessage(chatId, `✅ СИМ (${label}) взят.`);
         stateManager.clearUser(telegramId);
+        await sendCourierMainKeyboard(bot, chatId, telegramId, courierService, sessionService);
         return true;
     };
 

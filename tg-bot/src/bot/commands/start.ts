@@ -5,13 +5,10 @@ import { RegistrationHandler } from '../handlers/registration.handler';
 import { CourierService } from '../../services/courier.service';
 import { SessionService } from '../../services/session.service';
 import {
+    getCourierActiveSessionKeyboard,
     getCourierIdleKeyboard,
     getSelectWarehouseKeyboard
 } from '../keyboards/registration.keyboard';
-
-const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
-    remove_keyboard: true
-};
 
 export function registerStartCommand(
     bot: TelegramBot,
@@ -69,8 +66,8 @@ export function registerStartCommand(
             const hasActiveSession = await sessionService.hasActiveSession(userId);
 
             if (hasActiveSession) {
-                await bot.sendMessage(chatId, `${greeting}\n\nУ вас активная сессия. Используйте /return_sim для завершения.`, {
-                    reply_markup: HIDE_REPLY_KEYBOARD
+                await bot.sendMessage(chatId, `${greeting}\n\nУ вас активная сессия. Используйте кнопку ниже для сдачи СИМ:`, {
+                    reply_markup: getCourierActiveSessionKeyboard()
                 });
                 return;
             }

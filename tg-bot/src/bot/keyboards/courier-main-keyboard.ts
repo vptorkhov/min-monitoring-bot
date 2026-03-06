@@ -2,17 +2,13 @@ import TelegramBot from 'node-telegram-bot-api';
 import { CourierService } from '../../services/courier.service';
 import { SessionService } from '../../services/session.service';
 import {
+    getCourierActiveSessionKeyboard,
     getCourierIdleKeyboard,
     getSelectWarehouseKeyboard
 } from './registration.keyboard';
 
-const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
-    remove_keyboard: true
-};
-
 type CourierMainKeyboardReplyMarkup =
-    | TelegramBot.ReplyKeyboardMarkup
-    | TelegramBot.ReplyKeyboardRemove;
+    | TelegramBot.ReplyKeyboardMarkup;
 
 interface CourierMainKeyboardPayload {
     text: string;
@@ -36,8 +32,8 @@ export async function resolveCourierMainKeyboard(
     const hasSession = await sessionService.hasActiveSession(telegramId);
     if (hasSession) {
         return {
-            text: 'У вас активная сессия. Используйте /return_sim для завершения.',
-            replyMarkup: HIDE_REPLY_KEYBOARD
+            text: 'У вас активная сессия. Используйте кнопку ниже для сдачи СИМ:',
+            replyMarkup: getCourierActiveSessionKeyboard()
         };
     }
 

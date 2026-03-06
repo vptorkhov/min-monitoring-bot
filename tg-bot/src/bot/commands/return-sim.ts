@@ -7,6 +7,7 @@ import { stateManager } from '../state-manager';
 import { DeviceSessionState } from '../../constants/states.constant';
 import { isCommand } from '../../constants/commands.constant';
 import { getCourierIdleKeyboard } from '../keyboards/registration.keyboard';
+import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
 
 const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
     remove_keyboard: true
@@ -58,12 +59,7 @@ export function registerReturnSimCommand(
         });
     };
 
-    // Команда запуска процесса сдачи
-    bot.onText(/\/return_sim/, async (msg) => {
-        const chatId = msg.chat.id;
-        const telegramId = msg.from?.id;
-        if (!telegramId) return;
-
+    const startReturnSimFlow = async (chatId: number, telegramId: number) => {
         const check = await courierService.checkCourierExists(telegramId);
         if (!check.exists) {
             await bot.sendMessage(chatId, '❌ Вы не зарегистрированы.');
@@ -102,6 +98,15 @@ export function registerReturnSimCommand(
             { reply_markup: HIDE_REPLY_KEYBOARD }
         );
         stateManager.setUserState(telegramId, DeviceSessionState.RETURN_ASK_DAMAGE);
+    };
+
+    // Команда запуска процесса сдачи
+    bot.onText(/\/return_sim/, async (msg) => {
+        const chatId = msg.chat.id;
+        const telegramId = msg.from?.id;
+        if (!telegramId) return;
+
+        await startReturnSimFlow(chatId, telegramId);
     });
 
     // последующие шаги — общий обработчик сообщений
@@ -109,6 +114,13 @@ export function registerReturnSimCommand(
         const chatId = msg.chat.id;
         const telegramId = msg.from?.id;
         if (!telegramId) return;
+
+        const textAsCommand = convertKeyboardButtonToCommand(msg.text || '');
+        if (textAsCommand === '/return_sim' && (msg.text || '') !== '/return_sim') {
+            await bot.sendMessage(chatId, '/return_sim');
+            await startReturnSimFlow(chatId, telegramId);
+            return;
+        }
 
         const state = stateManager.getUserState(telegramId);
         if (!state) return;

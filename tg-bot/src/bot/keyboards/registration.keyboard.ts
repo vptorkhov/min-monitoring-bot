@@ -8,7 +8,8 @@ export const KEYBOARD_BUTTON_TEXT = {
     CANCEL: '❌ Отмена',
     SELECT_WAREHOUSE: '🏠 Выбрать склад',
     TAKE_SIM: '🚲 Взять СИМ',
-    CLEAR_WAREHOUSE: '❌🏠 Отвязаться от склада'
+    CLEAR_WAREHOUSE: '❌🏠 Отвязаться от склада',
+    RETURN_SIM: '🚲❌ Сдать СИМ'
 } as const;
 
 // Исторический текст кнопки выбора склада (без пробела).
@@ -75,6 +76,19 @@ export const getCourierIdleKeyboard = (): TelegramBot.ReplyKeyboardMarkup => {
             [{ text: KEYBOARD_BUTTON_TEXT.TAKE_SIM }],
             [{ text: KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE }],
             [{ text: KEYBOARD_BUTTON_TEXT.CLEAR_WAREHOUSE }]
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: false
+    };
+};
+
+/**
+ * Клавиатура активного курьера с начатой сессией СИМ.
+ */
+export const getCourierActiveSessionKeyboard = (): TelegramBot.ReplyKeyboardMarkup => {
+    return {
+        keyboard: [
+            [{ text: KEYBOARD_BUTTON_TEXT.RETURN_SIM }]
         ],
         resize_keyboard: true,
         one_time_keyboard: false
