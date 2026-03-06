@@ -35,7 +35,7 @@ export function registerAllCommands(
     // Регистрируем только существующие команды
     registerStartCommand(bot, courierService, registrationHandler, sessionService);
     // Регистрируем команду /cancel
-    registerCancelCommand(bot, registrationHandler);
+    registerCancelCommand(bot, registrationHandler, courierService, sessionService);
     // Создаём репозиторий и сервис складов
     const warehouseRepository = new WarehouseRepository();
     const warehouseService = new WarehouseService(warehouseRepository);

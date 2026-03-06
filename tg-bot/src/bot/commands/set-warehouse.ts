@@ -8,10 +8,10 @@ import { Warehouse } from '../../repositories/types/warehouse.type';
 import { isCommand } from '../../constants/commands.constant';
 import {
     KEYBOARD_BUTTON_TEXT,
-    getCourierIdleKeyboard,
     getWarehouseNumberSelectionKeyboard
 } from '../keyboards/registration.keyboard';
 import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
+import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
 
 /**
  * Команда /set_warehouse
@@ -23,6 +23,7 @@ export function registerSetWarehouseCommand(
     warehouseService: WarehouseService
 ) {
     const WAREHOUSE_CALLBACK_PREFIX = 'warehouse_select_';
+    const sessionService = new SessionService(courierService);
     const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
         remove_keyboard: true
     };
@@ -54,7 +55,6 @@ export function registerSetWarehouseCommand(
         const index = parseInt(warehouseNumberText, 10) - 1;
 
         // Перед применением снова проверим, не появилась ли активная сессия.
-        const sessionService = new SessionService();
         const hasSession = await sessionService.hasActiveSession(telegramId);
         if (hasSession) {
             await bot.sendMessage(chatId, '❌ У вас есть активная сессия. Сначала сдайте СИМ.', {
@@ -93,9 +93,7 @@ export function registerSetWarehouseCommand(
                 reply_markup: HIDE_REPLY_KEYBOARD
             });
 
-            await bot.sendMessage(chatId, 'Выберите действие:', {
-                reply_markup: getCourierIdleKeyboard()
-            });
+            await sendCourierMainKeyboard(bot, chatId, telegramId, courierService, sessionService);
         }
 
         // Очищаем состояние и данные пользователя.
@@ -119,7 +117,6 @@ export function registerSetWarehouseCommand(
         }
 
         // запрет на смену, если есть активная сессия
-        const sessionService = new SessionService();
         const hasSession = await sessionService.hasActiveSession(telegramId);
         if (hasSession) {
             await bot.sendMessage(chatId, '❌ У вас есть активная сессия. Сначала сдайте СИМ.');
@@ -220,6 +217,7 @@ export function registerSetWarehouseCommand(
             await bot.sendMessage(chatId, '❌ Действие отменено.', {
                 reply_markup: HIDE_REPLY_KEYBOARD
             });
+            await sendCourierMainKeyboard(bot, chatId, telegramId, courierService, sessionService);
             return;
         }
 
