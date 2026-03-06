@@ -42,6 +42,8 @@ export function convertKeyboardButtonToCommand(buttonText: string): string {
             return '/start';
         case KEYBOARD_BUTTON_TEXT.CANCEL:
             return '/cancel';
+        case KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE:
+            return '/set_warehouse';
         default:
             return buttonText;
     }

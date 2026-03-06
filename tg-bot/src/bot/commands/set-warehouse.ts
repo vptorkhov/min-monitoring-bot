@@ -6,6 +6,7 @@ import { stateManager } from '../state-manager';
 import { WarehouseState } from '../../constants/states.constant';
 import { Warehouse } from '../../repositories/types/warehouse.type';
 import { isCommand } from '../../constants/commands.constant';
+import { KEYBOARD_BUTTON_TEXT } from '../keyboards/registration.keyboard';
 
 /**
  * Команда /set_warehouse
@@ -16,11 +17,9 @@ export function registerSetWarehouseCommand(
     courierService: CourierService,
     warehouseService: WarehouseService
 ) {
-    // Шаг 1: обработка команды /set_warehouse
-    bot.onText(/\/set_warehouse/, async (msg) => {
-        const chatId = msg.chat.id;
-        const telegramId = msg.from?.id;
-        if (!telegramId) return;
+    const startWarehouseSelection = async (chatId: number, telegramId: number) => {
+        // Входим в процесс выбора склада заново, если пользователь уже был в нём.
+        stateManager.clearUser(telegramId);
 
         // Проверка курьера
         const check = await courierService.checkCourierExists(telegramId);
@@ -58,6 +57,33 @@ export function registerSetWarehouseCommand(
         // Сохраняем состояние и список складов пользователя
         stateManager.setUserState(telegramId, WarehouseState.SELECTING_WAREHOUSE);
         stateManager.setUserTempData(telegramId, { warehouses });
+    };
+
+    // Шаг 1: обработка команды /set_warehouse
+    bot.onText(/\/set_warehouse/, async (msg) => {
+        const chatId = msg.chat.id;
+        const telegramId = msg.from?.id;
+        if (!telegramId) return;
+
+        await startWarehouseSelection(chatId, telegramId);
+    });
+
+    // Запуск того же потока при нажатии inline-кнопки "🏠Выбрать склад"
+    bot.on('callback_query', async (query) => {
+        if (query.data !== 'set_warehouse') {
+            return;
+        }
+
+        const chatId = query.message?.chat.id;
+        const telegramId = query.from.id;
+
+        await bot.answerCallbackQuery(query.id);
+
+        if (!chatId) {
+            return;
+        }
+
+        await startWarehouseSelection(chatId, telegramId);
     });
 
     // Шаг 2: обработка текстового ввода пользователя при выборе склада
@@ -66,10 +92,17 @@ export function registerSetWarehouseCommand(
         const telegramId = msg.from?.id;
         if (!telegramId) return;
 
+        const text = msg.text?.trim();
+
+        // Перехват reply-кнопки "🏠Выбрать склад" как эквивалента /set_warehouse
+        if (text === KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE) {
+            await startWarehouseSelection(chatId, telegramId);
+            return;
+        }
+
         const state = stateManager.getUserState(telegramId);
         if (state !== WarehouseState.SELECTING_WAREHOUSE) return;
 
-        const text = msg.text?.trim();
         if (!text || isCommand(text)) {
             return; // любое сообщение, которое является командой, игнорируем здесь
         }

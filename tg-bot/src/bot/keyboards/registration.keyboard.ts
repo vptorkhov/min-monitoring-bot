@@ -5,7 +5,8 @@ import TelegramBot from 'node-telegram-bot-api';
 // Константы текста кнопок
 export const KEYBOARD_BUTTON_TEXT = {
     START: '✔️ Старт',
-    CANCEL: '❌ Отмена'
+    CANCEL: '❌ Отмена',
+    SELECT_WAREHOUSE: '🏠Выбрать склад'
 } as const;
 
 /**
@@ -33,5 +34,19 @@ export const getCancelKeyboard = (): TelegramBot.ReplyKeyboardMarkup => {
         ],
         resize_keyboard: true,
         one_time_keyboard: true
+    };
+};
+
+/**
+ * Клавиатура для выбора склада после активации
+ * Содержит кнопку 🏠 Выбрать склад
+ */
+export const getSelectWarehouseKeyboard = (): TelegramBot.ReplyKeyboardMarkup => {
+    return {
+        keyboard: [
+            [{ text: KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE }]
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: false
     };
 };
