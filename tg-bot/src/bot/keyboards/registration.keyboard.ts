@@ -16,6 +16,13 @@ export const LEGACY_KEYBOARD_BUTTON_TEXT = {
     SELECT_WAREHOUSE: '🏠Выбрать склад'
 } as const;
 
+// Callback data для inline-кнопок действий курьера.
+export const INLINE_CALLBACK_DATA = {
+    TAKE_SIM: 'take_sim',
+    SET_WAREHOUSE: 'set_warehouse',
+    CLEAR_WAREHOUSE: 'clear_warehouse'
+} as const;
+
 /**
  * Клавиатура для начала регистрации
  * Содержит кнопку ✔️ Старт
@@ -70,6 +77,19 @@ export const getCourierIdleKeyboard = (): TelegramBot.ReplyKeyboardMarkup => {
         ],
         resize_keyboard: true,
         one_time_keyboard: false
+    };
+};
+
+/**
+ * Inline-клавиатура действий активного курьера.
+ */
+export const getCourierMainInlineKeyboard = (): TelegramBot.InlineKeyboardMarkup => {
+    return {
+        inline_keyboard: [
+            [{ text: KEYBOARD_BUTTON_TEXT.TAKE_SIM, callback_data: INLINE_CALLBACK_DATA.TAKE_SIM }],
+            [{ text: KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE, callback_data: INLINE_CALLBACK_DATA.SET_WAREHOUSE }],
+            [{ text: KEYBOARD_BUTTON_TEXT.CLEAR_WAREHOUSE, callback_data: INLINE_CALLBACK_DATA.CLEAR_WAREHOUSE }]
+        ]
     };
 };
 

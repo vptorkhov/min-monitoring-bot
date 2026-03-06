@@ -7,7 +7,9 @@ import { WarehouseState } from '../../constants/states.constant';
 import { Warehouse } from '../../repositories/types/warehouse.type';
 import { isCommand } from '../../constants/commands.constant';
 import {
+    INLINE_CALLBACK_DATA,
     KEYBOARD_BUTTON_TEXT,
+    getCourierMainInlineKeyboard,
     getWarehouseNumberSelectionKeyboard
 } from '../keyboards/registration.keyboard';
 import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
@@ -90,7 +92,7 @@ export function registerSetWarehouseCommand(
             });
         } else {
             await bot.sendMessage(chatId, `✅ Вы успешно прикрепились к складу: ${selectedWarehouse.name}`, {
-                reply_markup: HIDE_REPLY_KEYBOARD
+                reply_markup: getCourierMainInlineKeyboard()
             });
 
             await sendCourierMainKeyboard(bot, chatId, telegramId, courierService, sessionService);
@@ -173,7 +175,8 @@ export function registerSetWarehouseCommand(
             return;
         }
 
-        if (callbackData === 'set_warehouse') {
+        if (callbackData === INLINE_CALLBACK_DATA.SET_WAREHOUSE) {
+            await bot.sendMessage(chatId, '/set_warehouse');
             await startWarehouseSelection(chatId, telegramId);
             return;
         }

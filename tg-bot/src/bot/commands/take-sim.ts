@@ -8,6 +8,7 @@ import { stateManager } from '../state-manager';
 import { DeviceSessionState } from '../../constants/states.constant';
 import { isCommand } from '../../constants/commands.constant';
 import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
+import { INLINE_CALLBACK_DATA } from '../keyboards/registration.keyboard';
 
 const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
     remove_keyboard: true
@@ -76,6 +77,22 @@ export function registerTakeSimCommand(
         const telegramId = msg.from?.id;
         if (!telegramId) return;
 
+        await startTakeSimFlow(chatId, telegramId);
+    });
+
+    // Запуск потока по inline-кнопке "🚲 Взять СИМ"
+    bot.on('callback_query', async (query) => {
+        if (query.data !== INLINE_CALLBACK_DATA.TAKE_SIM) {
+            return;
+        }
+
+        const chatId = query.message?.chat.id;
+        const telegramId = query.from.id;
+        if (!chatId) {
+            return;
+        }
+
+        await bot.sendMessage(chatId, '/take_sim');
         await startTakeSimFlow(chatId, telegramId);
     });
 

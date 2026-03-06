@@ -3,6 +3,7 @@ import { CourierService } from '../../services/courier.service';
 import { SessionService } from '../../services/session.service';
 import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
 import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
+import { INLINE_CALLBACK_DATA } from '../keyboards/registration.keyboard';
 
 const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
     remove_keyboard: true
@@ -56,6 +57,21 @@ export function registerClearWarehouseCommand(
         const telegramId = msg.from?.id;
         if (!telegramId) return;
 
+        await clearWarehouseFlow(chatId, telegramId);
+    });
+
+    bot.on('callback_query', async (query) => {
+        if (query.data !== INLINE_CALLBACK_DATA.CLEAR_WAREHOUSE) {
+            return;
+        }
+
+        const chatId = query.message?.chat.id;
+        const telegramId = query.from.id;
+        if (!chatId) {
+            return;
+        }
+
+        await bot.sendMessage(chatId, '/clear_warehouse');
         await clearWarehouseFlow(chatId, telegramId);
     });
 
