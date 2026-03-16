@@ -2,6 +2,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import { CourierService } from '../../services/courier.service';
 import { WarehouseService } from '../../services/warehouse.service';
 import { SessionService } from '../../services/session.service';
+import { CallbackQueryHandler } from '../callback-router';
 import { stateManager } from '../state-manager';
 import { WarehouseState } from '../../constants/states.constant';
 import { Warehouse } from '../../repositories/types/warehouse.type';
@@ -10,8 +11,9 @@ import {
     INLINE_CALLBACK_DATA,
     KEYBOARD_BUTTON_TEXT,
     getCourierMainInlineKeyboard,
+    getWarehouseNumberSelectionInlineKeyboard,
     getWarehouseNumberSelectionKeyboard
-} from '../keyboards/registration.keyboard';
+} from '../keyboards';
 import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
 import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
 
@@ -22,27 +24,12 @@ import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
 export function registerSetWarehouseCommand(
     bot: TelegramBot,
     courierService: CourierService,
-    warehouseService: WarehouseService
+    warehouseService: WarehouseService,
+    registerCallbackHandler: (handler: CallbackQueryHandler) => void
 ) {
-    const WAREHOUSE_CALLBACK_PREFIX = 'warehouse_select_';
     const sessionService = new SessionService(courierService);
     const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
         remove_keyboard: true
-    };
-
-    const getWarehouseInlineKeyboard = (warehouseCount: number): TelegramBot.InlineKeyboardMarkup => {
-        const buttons = Array.from({ length: warehouseCount }, (_, index) => ({
-            text: String(index + 1),
-            callback_data: `${WAREHOUSE_CALLBACK_PREFIX}${index + 1}`
-        }));
-
-        const chunkSize = 5;
-        const rows: TelegramBot.InlineKeyboardButton[][] = [];
-        for (let i = 0; i < buttons.length; i += chunkSize) {
-            rows.push(buttons.slice(i, i + chunkSize));
-        }
-
-        return { inline_keyboard: rows };
     };
 
     const tryAssignWarehouseByNumber = async (
@@ -138,7 +125,7 @@ export function registerSetWarehouseCommand(
             .join('\n');
 
         await bot.sendMessage(chatId, `Введите порядковый номер склада для прикрепления:\n\n${warehouseList}`, {
-            reply_markup: getWarehouseInlineKeyboard(warehouses.length)
+            reply_markup: getWarehouseNumberSelectionInlineKeyboard(warehouses.length)
         });
 
         await bot.sendMessage(chatId, 'Выберите номер кнопкой ниже или введите вручную:', {
@@ -151,7 +138,7 @@ export function registerSetWarehouseCommand(
     };
 
     // Шаг 1: обработка команды /set_warehouse
-    bot.onText(/\/set_warehouse/, async (msg) => {
+    bot.onText(/^\/set_warehouse(?:@\w+)?$/, async (msg) => {
         const chatId = msg.chat.id;
         const telegramId = msg.from?.id;
         if (!telegramId) return;
@@ -159,41 +146,38 @@ export function registerSetWarehouseCommand(
         await startWarehouseSelection(chatId, telegramId);
     });
 
-    // Запуск того же потока при нажатии inline-кнопки "🏠Выбрать склад"
-    bot.on('callback_query', async (query) => {
+    // Запуск того же потока при нажатии inline-кнопок
+    registerCallbackHandler(async (query) => {
         const callbackData = query.data;
         if (!callbackData) {
-            return;
+            return false;
         }
 
         const chatId = query.message?.chat.id;
         const telegramId = query.from.id;
 
-        await bot.answerCallbackQuery(query.id);
-
         if (!chatId) {
-            return;
+            return false;
         }
 
         if (callbackData === INLINE_CALLBACK_DATA.SET_WAREHOUSE) {
-            await bot.sendMessage(chatId, '/set_warehouse');
             await startWarehouseSelection(chatId, telegramId);
-            return;
+            return true;
         }
 
-        if (callbackData.startsWith(WAREHOUSE_CALLBACK_PREFIX)) {
-            const selectedNumber = callbackData.replace(WAREHOUSE_CALLBACK_PREFIX, '');
+        if (callbackData.startsWith(INLINE_CALLBACK_DATA.WAREHOUSE_SELECT_PREFIX)) {
+            const selectedNumber = callbackData.replace(INLINE_CALLBACK_DATA.WAREHOUSE_SELECT_PREFIX, '');
             const state = stateManager.getUserState(telegramId);
             if (state !== WarehouseState.SELECTING_WAREHOUSE) {
                 await bot.sendMessage(chatId, 'ℹ️ Сначала запустите выбор склада командой /set_warehouse.');
-                return;
+                return true;
             }
 
             await tryAssignWarehouseByNumber(chatId, telegramId, selectedNumber);
-            return;
+            return true;
         }
 
-        return;
+        return false;
     });
 
     // Шаг 2: обработка текстового ввода пользователя при выборе склада

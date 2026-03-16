@@ -8,7 +8,7 @@ import {
     getCourierActiveSessionKeyboard,
     getCourierIdleKeyboard,
     getSelectWarehouseKeyboard
-} from '../keyboards/registration.keyboard';
+} from '../keyboards';
 
 export function registerStartCommand(
     bot: TelegramBot,
@@ -16,7 +16,7 @@ export function registerStartCommand(
     registrationHandler: RegistrationHandler,
     sessionService: SessionService
 ) {
-    bot.onText(/\/start/, async (msg) => {
+    bot.onText(/^\/start(?:@\w+)?$/, async (msg) => {
         const chatId = msg.chat.id;
 
         // Проверяем, что from существует

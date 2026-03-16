@@ -3,6 +3,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { CourierService } from '../../services/courier.service';
 import { SessionService, DamageType } from '../../services/session.service';
+import { CallbackQueryHandler } from '../callback-router';
 import { stateManager } from '../state-manager';
 import { DeviceSessionState } from '../../constants/states.constant';
 import { isCommand } from '../../constants/commands.constant';
@@ -12,10 +13,10 @@ import {
     getReturnSimDamageQuestionInlineKeyboard,
     getReturnSimDamageTypeInlineKeyboard,
     getReturnSimDamageTypeKeyboard
-} from '../keyboards/registration.keyboard';
+} from '../keyboards';
 import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
 import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
-import { INLINE_CALLBACK_DATA } from '../keyboards/registration.keyboard';
+import { INLINE_CALLBACK_DATA } from '../keyboards';
 
 const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
     remove_keyboard: true
@@ -49,7 +50,8 @@ function parseDamageType(answer: string): DamageType | null {
 export function registerReturnSimCommand(
     bot: TelegramBot,
     courierService: CourierService,
-    sessionService: SessionService
+    sessionService: SessionService,
+    registerCallbackHandler: (handler: CallbackQueryHandler) => void
 ) {
     const sendIdleKeyboardIfEligible = async (chatId: number, telegramId: number) => {
         const check = await courierService.checkCourierExists(telegramId);
@@ -156,7 +158,7 @@ export function registerReturnSimCommand(
     };
 
     // Команда запуска процесса сдачи
-    bot.onText(/\/return_sim/, async (msg) => {
+    bot.onText(/^\/return_sim(?:@\w+)?$/, async (msg) => {
         const chatId = msg.chat.id;
         const telegramId = msg.from?.id;
         if (!telegramId) return;
@@ -164,7 +166,7 @@ export function registerReturnSimCommand(
         await startReturnSimFlow(chatId, telegramId);
     });
 
-    bot.on('callback_query', async (query) => {
+    registerCallbackHandler(async (query) => {
         const callbackData = query.data;
         if (
             callbackData !== INLINE_CALLBACK_DATA.RETURN_DAMAGE_NO &&
@@ -172,16 +174,14 @@ export function registerReturnSimCommand(
             callbackData !== INLINE_CALLBACK_DATA.RETURN_DAMAGE_WEAK &&
             callbackData !== INLINE_CALLBACK_DATA.RETURN_DAMAGE_CRITICAL
         ) {
-            return;
+            return false;
         }
 
         const chatId = query.message?.chat.id;
         const telegramId = query.from.id;
         if (!chatId) {
-            return;
+            return false;
         }
-
-        await bot.answerCallbackQuery(query.id);
 
         const state = stateManager.getUserState(telegramId);
 
@@ -191,7 +191,7 @@ export function registerReturnSimCommand(
         ) {
             if (state !== DeviceSessionState.RETURN_ASK_DAMAGE) {
                 await bot.sendMessage(chatId, 'ℹ️ Сначала запустите сдачу СИМ командой /return_sim.');
-                return;
+                return true;
             }
 
             const answerText = callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_NO ? 'Нет' : 'Да';
@@ -199,12 +199,12 @@ export function registerReturnSimCommand(
 
             const yn: 'yes' | 'no' = callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_NO ? 'no' : 'yes';
             await handleReturnAskDamageDecision(chatId, telegramId, yn);
-            return;
+            return true;
         }
 
         if (state !== DeviceSessionState.RETURN_DAMAGE_TYPE) {
             await bot.sendMessage(chatId, 'ℹ️ Сначала выберите, есть ли повреждение у СИМ.');
-            return;
+            return true;
         }
 
         const damageTypeText = callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_WEAK ? 'Слабое' : 'Критическое';
@@ -212,6 +212,7 @@ export function registerReturnSimCommand(
 
         const dtype: DamageType = callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_WEAK ? 'warning' : 'broken';
         await handleReturnDamageTypeDecision(chatId, telegramId, dtype);
+        return true;
     });
 
     // последующие шаги — общий обработчик сообщений

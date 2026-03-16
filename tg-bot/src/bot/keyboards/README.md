@@ -2,76 +2,68 @@
 
 ## Описание
 
-Содержит функции для создания встроенных reply-клавиатур Telegram бота.
-Inline-клавиатуры для выбора склада формируются в обработчике команды `set-warehouse.ts`.
+Содержит функции и константы для создания reply- и inline-клавиатур Telegram бота.
+Структура декомпозирована по доменам: константы, регистрация, действия курьера, выбор склада, выбор СИМ и возврат СИМ.
 
 ## Файлы
 
-### `registration.keyboard.ts`
+### `keyboard.constants.ts`
 
-Клавиатуры для процесса регистрации и выбора склада:
+Константы текстов и callback-идентификаторов:
 
-- **`INLINE_CALLBACK_DATA`** - callback-идентификаторы inline-кнопок действий курьера
-    - `take_sim` -> взять СИМ
-    - `take_sim_select_<N>` -> выбрать СИМ по номеру `N` из списка
-    - `set_warehouse` -> выбрать склад
-    - `clear_warehouse` -> отвязаться от склада
-    - `return_damage_no` -> ответ `Нет` на этапе вопроса о повреждениях
-    - `return_damage_yes` -> ответ `Да` на этапе вопроса о повреждениях
-    - `return_damage_weak` -> выбор `Слабое` на этапе выбора типа повреждения
-    - `return_damage_critical` -> выбор `Критическое` на этапе выбора типа повреждения
+- `KEYBOARD_BUTTON_TEXT`
+- `LEGACY_KEYBOARD_BUTTON_TEXT`
+- `INLINE_CALLBACK_DATA`
 
-- **`getRegistrationStartKeyboard()`** - Клавиатура для начала регистрации
-    - Содержит кнопку: `✔️ Старт`
-    - Используется при запросе имени курьера
-- **`getCancelKeyboard()`** - Клавиатура для отмены операции
-    - Содержит кнопку: `❌ Отмена`
-    - Используется при вводе имени и телефона
-- **`getSelectWarehouseKeyboard()`** - Клавиатура для перехода к выбору склада
-    - Содержит кнопку: `🏠 Выбрать склад`
-    - Используется после активации учетной записи
-- **`getCourierIdleKeyboard()`** - Основная клавиатура активного курьера (без активной сессии)
-    - Содержит кнопки (в порядке отображения):
-        - `🚲 Взять СИМ`
-        - `🏠 Выбрать склад`
-        - `❌🏠 Отвязаться от склада`
-    - Используется при условии: курьер зарегистрирован и активен, склад выбран, активной сессии нет, пользователь не находится в процессе команды
-- **`getCourierActiveSessionKeyboard()`** - Клавиатура активного курьера при начатой сессии СИМ
-    - Содержит кнопку: `🚲❌ Сдать СИМ`
-    - Используется при условии: курьер зарегистрирован, учетная запись активна, склад выбран, сессия СИМ начата
-- **`getWarehouseNumberSelectionKeyboard(warehouseCount)`** - Клавиатура выбора склада по номеру
-    - Содержит кнопки `1..N` (по количеству доступных складов)
-    - Дополнительно содержит кнопку `❌ Отмена`
-    - Используется в процессе `/set_warehouse`
-- **`getTakeSimNumberSelectionKeyboard(deviceCount)`** - Клавиатура выбора СИМ по номеру
-    - Содержит кнопку `❌ Отмена` первой строкой
-    - Затем содержит кнопки `1..N` (по количеству СИМ в списке)
-    - Используется в процессе `/take_sim` после вывода списка доступных СИМ
-- **`getTakeSimNumberSelectionInlineKeyboard(deviceCount)`** - Inline-клавиатура выбора СИМ по номеру
-    - Содержит кнопки `1..N` (по количеству СИМ в списке)
-    - Показывается под сообщением со списком СИМ после `/take_sim`
-- **`getReturnSimDamageQuestionInlineKeyboard()`** - Inline-клавиатура вопроса о повреждениях в `/return_sim`
-    - Содержит кнопки (в порядке отображения):
-        - `Нет`
-        - `Да`
-    - Показывается под сообщением этапа `Есть ли повреждение у СИМ?`
-- **`getReturnSimDamageTypeKeyboard()`** - Reply-клавиатура выбора типа повреждения в `/return_sim`
-    - Содержит кнопки (в порядке отображения):
-        - `Слабое`
-        - `Критическое`
-        - `❌ Отмена`
-    - Используется после выбора ответа `Да` на вопрос о повреждениях
-- **`getReturnSimDamageTypeInlineKeyboard()`** - Inline-клавиатура выбора типа повреждения в `/return_sim`
-    - Содержит кнопки (в порядке отображения):
-        - `Слабое`
-        - `Критическое`
-    - Показывается под сообщением этапа `Выберите тип повреждения`
-- **`getCourierMainInlineKeyboard()`** - Inline-клавиатура быстрых действий курьера
-    - Содержит кнопки (в порядке отображения):
-        - `🚲 Взять СИМ`
-        - `🏠 Выбрать склад`
-        - `❌🏠 Отвязаться от склада`
-    - Показывается под сообщением об успешном выборе склада
+### `keyboard.utils.ts`
+
+Вспомогательные функции построения рядов кнопок с номерами:
+
+- `buildNumberReplyRows(count)`
+- `buildNumberInlineRows(count, callbackPrefix)`
+
+### `registration-flow.keyboard.ts`
+
+Клавиатуры для регистрации:
+
+- `getRegistrationStartKeyboard()`
+- `getCancelKeyboard()`
+
+### `courier-actions.keyboard.ts`
+
+Клавиатуры основных действий курьера:
+
+- `getSelectWarehouseKeyboard()`
+- `getCourierIdleKeyboard()`
+- `getCourierActiveSessionKeyboard()`
+- `getCourierMainInlineKeyboard()`
+
+### `warehouse-selection.keyboard.ts`
+
+Клавиатуры шага выбора склада:
+
+- `getWarehouseNumberSelectionKeyboard(warehouseCount)`
+- `getWarehouseNumberSelectionInlineKeyboard(warehouseCount)`
+
+### `sim-selection.keyboard.ts`
+
+Клавиатуры шага выбора СИМ:
+
+- `getTakeSimNumberSelectionKeyboard(deviceCount)`
+- `getTakeSimNumberSelectionInlineKeyboard(deviceCount)`
+
+### `return-sim.keyboard.ts`
+
+Клавиатуры сценария сдачи СИМ:
+
+- `getReturnSimDamageQuestionKeyboard()`
+- `getReturnSimDamageQuestionInlineKeyboard()`
+- `getReturnSimDamageTypeKeyboard()`
+- `getReturnSimDamageTypeInlineKeyboard()`
+
+### `index.ts`
+
+Barrel-файл для экспортов из всех keyboard-модулей.
 
 ### `courier-main-keyboard.ts`
 
@@ -94,7 +86,7 @@ import {
 	getRegistrationStartKeyboard,
 	getCancelKeyboard,
 	getWarehouseNumberSelectionKeyboard,
-} from "../keyboards/registration.keyboard";
+} from "../keyboards";
 
 // Отправка сообщения с клавиатурой
 await bot.sendMessage(chatId, "Введите имя:", {
@@ -137,7 +129,8 @@ await bot.sendMessage(chatId, "Выберите номер склада:", {
 - Для обратной совместимости поддерживается старый текст `🏠Выбрать склад` (без пробела)
 
 Для inline-кнопок используется `callback_query` с `callback_data` из `INLINE_CALLBACK_DATA`.
-При нажатии соответствующие обработчики запускают тот же flow, что и команды `/take_sim`, `/set_warehouse`, `/clear_warehouse`.
+При нажатии соответствующие обработчики запускают тот же flow, что и команды `/take_sim`, `/set_warehouse`, `/clear_warehouse`, без отправки в чат служебных сообщений вида `/command`.
+Маршрутизация inline-callback выполняется централизованно через `src/bot/callback-router.ts`.
 
 ## Архитектура
 
@@ -145,7 +138,7 @@ await bot.sendMessage(chatId, "Выберите номер склада:", {
 
 - `registration.handler.ts` - обработчик регистрации
 - `activation-notifier.service.ts` - сообщение об активации и кнопка `🏠 Выбрать склад`
-- `set-warehouse.ts` - выбор склада через reply-клавиатуру `1..N` + `❌ Отмена`
+- `set-warehouse.ts` - выбор склада через inline-клавиатуру `1..N` и reply-клавиатуру `1..N` + `❌ Отмена`
 - `take-sim.ts` - выбор СИМ через reply-клавиатуру `❌ Отмена` + `1..N`
 - `return-sim.ts` - этап вопроса о повреждениях через inline-кнопки `Нет` / `Да`
 - `return-sim.ts` - этап выбора типа повреждения через reply `Слабое` / `Критическое` / `❌ Отмена` и inline `Слабое` / `Критическое`

@@ -23,6 +23,8 @@ min-monitoring-bot/
         ├── bot/                          # Логика Telegram-бота
         │   ├── index.ts                  # Создание экземпляра бота
         │   ├── init.ts                   # Инициализация зависимостей и регистрация команд/middleware
+        │   ├── callback-router.ts        # Единый роутер callback_query для inline-кнопок
+        │   ├── state-manager.ts          # Централизованный менеджер состояний пользователей
         │   │
         │   ├── commands/                 # Обработчики Telegram-команд
         │   │   ├── index.ts              # Регистрация всех команд (/start, /set_warehouse, /clear_warehouse, /cancel и др.)
@@ -39,9 +41,8 @@ min-monitoring-bot/
         │   ├── middlewares/              # Middleware для управления состояниями пользователя
         │   │   ├── index.ts
         │   │   ├── registration-state.middleware.ts  # Контроль процесса регистрации
-        │   │   └── state-manager.ts       # Централизованный менеджер состояний пользователей
         │   │
-        │   └── keyboards/                # Telegram-клавиатуры (пока не используются)
+        │   └── keyboards/                # Reply/inline клавиатуры, константы и утилиты сборки кнопок
         │
         ├── config/                       # Конфигурация приложения
         │   └── database.ts               # Инициализация и управление подключением к PostgreSQL

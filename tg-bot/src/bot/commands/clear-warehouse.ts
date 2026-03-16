@@ -1,9 +1,10 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { CourierService } from '../../services/courier.service';
 import { SessionService } from '../../services/session.service';
+import { CallbackQueryHandler } from '../callback-router';
 import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
 import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
-import { INLINE_CALLBACK_DATA } from '../keyboards/registration.keyboard';
+import { INLINE_CALLBACK_DATA } from '../keyboards';
 
 const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
     remove_keyboard: true
@@ -15,7 +16,8 @@ const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
  */
 export function registerClearWarehouseCommand(
     bot: TelegramBot,
-    courierService: CourierService
+    courierService: CourierService,
+    registerCallbackHandler: (handler: CallbackQueryHandler) => void
 ) {
     const sessionService = new SessionService(courierService);
 
@@ -52,7 +54,7 @@ export function registerClearWarehouseCommand(
         await sendCourierMainKeyboard(bot, chatId, telegramId, courierService, sessionService);
     };
 
-    bot.onText(/\/clear_warehouse/, async (msg) => {
+    bot.onText(/^\/clear_warehouse(?:@\w+)?$/, async (msg) => {
         const chatId = msg.chat.id;
         const telegramId = msg.from?.id;
         if (!telegramId) return;
@@ -60,19 +62,19 @@ export function registerClearWarehouseCommand(
         await clearWarehouseFlow(chatId, telegramId);
     });
 
-    bot.on('callback_query', async (query) => {
+    registerCallbackHandler(async (query) => {
         if (query.data !== INLINE_CALLBACK_DATA.CLEAR_WAREHOUSE) {
-            return;
+            return false;
         }
 
         const chatId = query.message?.chat.id;
         const telegramId = query.from.id;
         if (!chatId) {
-            return;
+            return false;
         }
 
-        await bot.sendMessage(chatId, '/clear_warehouse');
         await clearWarehouseFlow(chatId, telegramId);
+        return true;
     });
 
     bot.on('message', async (msg) => {

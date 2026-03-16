@@ -4,6 +4,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import { CourierService } from '../../services/courier.service';
 import { SessionService } from '../../services/session.service';
 import { MobilityDeviceRepository, MobilityDevice } from '../../repositories/mobility-device.repository';
+import { CallbackQueryHandler } from '../callback-router';
 import { stateManager } from '../state-manager';
 import { DeviceSessionState } from '../../constants/states.constant';
 import { isCommand } from '../../constants/commands.constant';
@@ -12,7 +13,7 @@ import {
     INLINE_CALLBACK_DATA,
     getTakeSimNumberSelectionInlineKeyboard,
     getTakeSimNumberSelectionKeyboard
-} from '../keyboards/registration.keyboard';
+} from '../keyboards';
 import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
 
 const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = { remove_keyboard: true };
@@ -24,7 +25,8 @@ export function registerTakeSimCommand(
     bot: TelegramBot,
     courierService: CourierService,
     sessionService: SessionService,
-    deviceRepo: MobilityDeviceRepository
+    deviceRepo: MobilityDeviceRepository,
+    registerCallbackHandler: (handler: CallbackQueryHandler) => void
 ) {
     const tryTakeSimByNumber = async (
         chatId: number,
@@ -116,7 +118,7 @@ export function registerTakeSimCommand(
     };
 
     // Шаг 1: обработка команды
-    bot.onText(/\/take_sim/, async (msg) => {
+    bot.onText(/^\/take_sim(?:@\w+)?$/, async (msg) => {
         const chatId = msg.chat.id;
         const telegramId = msg.from?.id;
         if (!telegramId) return;
@@ -125,39 +127,36 @@ export function registerTakeSimCommand(
     });
 
     // Запуск потока по inline-кнопке "🚲 Взять СИМ"
-    bot.on('callback_query', async (query) => {
+    registerCallbackHandler(async (query) => {
         const callbackData = query.data;
         if (!callbackData) {
-            return;
+            return false;
         }
 
         const chatId = query.message?.chat.id;
         const telegramId = query.from.id;
         if (!chatId) {
-            return;
+            return false;
         }
 
-        await bot.answerCallbackQuery(query.id);
-
         if (callbackData === INLINE_CALLBACK_DATA.TAKE_SIM) {
-            await bot.sendMessage(chatId, '/take_sim');
             await startTakeSimFlow(chatId, telegramId);
-            return;
+            return true;
         }
 
         if (!callbackData.startsWith(INLINE_CALLBACK_DATA.TAKE_SIM_SELECT_PREFIX)) {
-            return;
+            return false;
         }
 
         const state = stateManager.getUserState(telegramId);
         if (state !== DeviceSessionState.TAKE_DEVICE_SELECT) {
             await bot.sendMessage(chatId, 'ℹ️ Сначала запустите выбор СИМ командой /take_sim.');
-            return;
+            return true;
         }
 
         const selectedNumber = callbackData.replace(INLINE_CALLBACK_DATA.TAKE_SIM_SELECT_PREFIX, '');
-        await bot.sendMessage(chatId, selectedNumber);
         await tryTakeSimByNumber(chatId, telegramId, selectedNumber);
+        return true;
     });
 
     // Шаг 2: обработка простого текста после списка

@@ -6,7 +6,7 @@ import { RegistrationState } from '../../constants/states.constant';
 import { isCommand } from '../../constants/commands.constant';
 import { formatErrorMessage, formatSuccessMessage } from '../../utils/telegram.utils';
 import { stateManager } from '../state-manager';
-import { getCancelKeyboard } from '../keyboards/registration.keyboard';
+import { getCancelKeyboard } from '../keyboards';
 
 export class RegistrationHandler {
     constructor(

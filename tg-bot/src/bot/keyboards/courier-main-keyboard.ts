@@ -5,7 +5,7 @@ import {
     getCourierActiveSessionKeyboard,
     getCourierIdleKeyboard,
     getSelectWarehouseKeyboard
-} from './registration.keyboard';
+} from './courier-actions.keyboard';
 
 type CourierMainKeyboardReplyMarkup =
     | TelegramBot.ReplyKeyboardMarkup;

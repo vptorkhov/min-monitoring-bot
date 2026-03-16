@@ -14,6 +14,7 @@ import { SessionService } from '../../services/session.service';
 import { MobilityDeviceRepository } from '../../repositories/mobility-device.repository';
 import { registerTakeSimCommand } from './take-sim';
 import { registerReturnSimCommand } from './return-sim';
+import { createCallbackRouter } from '../callback-router';
 
 /**
  * Регистрация всех команд бота
@@ -31,6 +32,7 @@ export function registerAllCommands(
     // Сессия и устройства
     const sessionService = new SessionService(courierService);
     const deviceRepository = new MobilityDeviceRepository();
+    const callbackRouter = createCallbackRouter(bot);
 
     // Регистрируем только существующие команды
     registerStartCommand(bot, courierService, registrationHandler, sessionService);
@@ -41,13 +43,13 @@ export function registerAllCommands(
     const warehouseService = new WarehouseService(warehouseRepository);
 
     // Регистрируем команду /set_warehouse
-    registerSetWarehouseCommand(bot, courierService, warehouseService);
+    registerSetWarehouseCommand(bot, courierService, warehouseService, callbackRouter.registerHandler);
     // Регистрируем команду /clear_warehouse
-    registerClearWarehouseCommand(bot, courierService);
+    registerClearWarehouseCommand(bot, courierService, callbackRouter.registerHandler);
 
     // Регистрируем команды для работы с СИМ
-    registerTakeSimCommand(bot, courierService, sessionService, deviceRepository);
-    registerReturnSimCommand(bot, courierService, sessionService);
+    registerTakeSimCommand(bot, courierService, sessionService, deviceRepository, callbackRouter.registerHandler);
+    registerReturnSimCommand(bot, courierService, sessionService, callbackRouter.registerHandler);
 
     console.log('✅ Команды бота зарегистрированы');
 
