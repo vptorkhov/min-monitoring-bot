@@ -131,6 +131,9 @@ CREATE INDEX idx_session_is_active ON session(is_active);
 -- Индекс для поиска активных сессий по курьеру (часто используемый запрос)
 CREATE INDEX idx_session_active_courier ON session(courier_id) WHERE is_active = true;
 
+-- Инвариант: у курьера может быть только одна активная сессия
+CREATE UNIQUE INDEX idx_session_active_courier_unique ON session(courier_id) WHERE is_active = true;
+
 -- Таблица для хранения информации об администраторах
 CREATE TABLE IF NOT EXISTS admins (
     id SERIAL PRIMARY KEY,

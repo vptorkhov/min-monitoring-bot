@@ -62,7 +62,9 @@
 - **status_comment** TEXT — комментарий о состоянии СИМ (повреждения и т.д.)
 - **is_active** BOOLEAN GENERATED ALWAYS AS (end_date IS NULL) STORED
 
-Индексы: `idx_session_courier_id`, `idx_session_device_id`, `idx_session_warehouse_id`, `idx_session_dates`, `idx_session_is_active`, а также частичный `idx_session_active_courier` для активных сессий по курьеру.
+Индексы: `idx_session_courier_id`, `idx_session_device_id`, `idx_session_warehouse_id`, `idx_session_dates`, `idx_session_is_active`, частичный `idx_session_active_courier` для активных сессий по курьеру, а также уникальный частичный `idx_session_active_courier_unique`.
+
+Инвариант: у одного курьера может быть только одна активная сессия (`is_active = true`) одновременно.
 
 ### `admins` — Администраторы системы
 

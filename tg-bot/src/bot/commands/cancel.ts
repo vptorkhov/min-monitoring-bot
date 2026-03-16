@@ -22,7 +22,7 @@ export function registerCancelCommand(
     courierService: CourierService,
     sessionService: SessionService
 ) {
-    bot.onText(/\/cancel/, async (msg) => {
+    bot.onText(/^\/cancel(?:@\w+)?$/, async (msg) => {
         const chatId = msg.chat.id;
         const userId = msg.from?.id;
 

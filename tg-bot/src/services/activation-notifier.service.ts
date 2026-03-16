@@ -1,9 +1,10 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { CourierService } from './courier.service';
 import {
+    INLINE_CALLBACK_DATA,
     getSelectWarehouseKeyboard,
     KEYBOARD_BUTTON_TEXT
-} from '../bot/keyboards/registration.keyboard';
+} from '../bot/keyboards';
 
 /**
  * Фоновый воркер, который отслеживает появление новых активированных
@@ -51,7 +52,7 @@ export class ActivationNotifier {
                                 [
                                     {
                                         text: KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE,
-                                        callback_data: 'set_warehouse'
+                                        callback_data: INLINE_CALLBACK_DATA.SET_WAREHOUSE
                                     }
                                 ]
                             ]

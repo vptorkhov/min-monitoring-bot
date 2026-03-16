@@ -3,7 +3,7 @@
 import {
     KEYBOARD_BUTTON_TEXT,
     LEGACY_KEYBOARD_BUTTON_TEXT
-} from '../bot/keyboards/registration.keyboard';
+} from '../bot/keyboards';
 
 // Интерфейс для данных пользователя из Telegram
 export interface TelegramUserData {
