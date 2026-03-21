@@ -37,6 +37,8 @@
 
 - `existsByNicknameInsensitive()` — проверка занятости логина без учета регистра
 - `createPendingAdmin()` — создание неактивного администратора (`permissions_level = 1`, `is_active = false`) с защитой от case-insensitive дублей
+- `getByNicknameInsensitive()` — получение администратора по логину без учета регистра
+- `updateLoginStatus()` — обновление флага авторизации `is_login`
 
 ### `session.repository.ts`
 

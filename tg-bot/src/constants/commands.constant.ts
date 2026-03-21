@@ -14,6 +14,7 @@ export const BOT_COMMANDS = [
     '/return_sim',     // сдать СИМ
     '/admin',
     '/exit_admin',
+    '/admin_logout',
     '/admin_login',
     '/admin_register'
     // здесь будут добавляться остальные команды

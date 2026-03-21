@@ -79,9 +79,42 @@ export function registerAdminModeCommands(
         await bot.sendMessage(
             chatId,
             wasInAdminMode
-                ? '🛡 Вы уже в админском режиме. Доступны: /admin_login, /admin_register, /exit_admin.'
-                : '🛡 Включен админский режим. Текущий курьерский сценарий остановлен. Доступны: /admin_login, /admin_register, /exit_admin.',
+                ? '🛡 Вы уже в админском режиме. Доступны: /admin_login, /admin_register, /admin_logout, /exit_admin.'
+                : '🛡 Включен админский режим. Текущий курьерский сценарий остановлен. Доступны: /admin_login, /admin_register, /admin_logout, /exit_admin.',
             { reply_markup: HIDE_REPLY_KEYBOARD }
+        );
+    });
+
+    bot.onText(/^\/admin_logout(?:@\w+)?$/, async (msg) => {
+        const chatId = msg.chat.id;
+        const telegramId = msg.from?.id;
+
+        if (!telegramId) {
+            return;
+        }
+
+        if (!isUserInAdminMode(telegramId)) {
+            await bot.sendMessage(chatId, 'ℹ️ Сначала войдите в админский режим командой /admin.');
+            return;
+        }
+
+        const currentState = stateManager.getUserState(telegramId);
+        const tempData = stateManager.getUserTempData<{ adminId?: number }>(telegramId);
+        const adminId = tempData?.adminId;
+        const wasAuthenticated = currentState === AdminState.AUTHENTICATED;
+
+        if (wasAuthenticated && adminId) {
+            await adminService.setLoginStatus(adminId, false);
+        }
+
+        stateManager.setUserState(telegramId, AdminState.GUEST_MODE);
+        stateManager.resetUserTempData(telegramId);
+
+        await bot.sendMessage(
+            chatId,
+            wasAuthenticated
+                ? '✅ Вы вышли из авторизованного админ-режима и возвращены в предадминское состояние. Доступны: /admin_login, /admin_register, /admin_logout, /exit_admin.'
+                : 'ℹ️ Вы уже находитесь в предадминском состоянии. Доступны: /admin_login, /admin_register, /admin_logout, /exit_admin.'
         );
     });
 
@@ -315,7 +348,7 @@ export function registerAdminModeCommands(
 
         await bot.sendMessage(
             chatId,
-            '✅ Заявка администратора создана. Ожидайте одобрения суперадминистратором.\n\n🛡 Вы по-прежнему в админском режиме. Доступны: /admin_login, /admin_register, /exit_admin.'
+            '✅ Заявка администратора создана. Ожидайте одобрения суперадминистратором.\n\n🛡 Вы по-прежнему в админском режиме. Доступны: /admin_login, /admin_register, /admin_logout, /exit_admin.'
         );
     });
 }

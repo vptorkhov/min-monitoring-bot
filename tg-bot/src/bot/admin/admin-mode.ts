@@ -7,6 +7,7 @@ import { stateManager } from '../state-manager';
 const ADMIN_GUEST_ALLOWED_COMMANDS = new Set<string>([
     '/admin',
     '/exit_admin',
+    '/admin_logout',
     '/admin_login',
     '/admin_register',
     '/cancel'
@@ -62,7 +63,7 @@ export async function blockIfAdminGuestCommandNotAllowed(
 
     await bot.sendMessage(
         chatId,
-        '🔒 Сейчас включен админский режим (без входа). Доступны только команды: /admin_login, /admin_register, /exit_admin.'
+        '🔒 Сейчас включен админский режим (без входа). Доступны только команды: /admin_login, /admin_register, /admin_logout, /exit_admin.'
     );
 
     return true;

@@ -42,7 +42,7 @@ export function registerCancelCommand(
 
             await bot.sendMessage(
                 chatId,
-                '❌ Действие отменено. Вы возвращены в предадминское состояние. Доступны: /admin_login, /admin_register, /exit_admin.'
+                '❌ Действие отменено. Вы возвращены в предадминское состояние. Доступны: /admin_login, /admin_register, /admin_logout, /exit_admin.'
             );
             return;
         }

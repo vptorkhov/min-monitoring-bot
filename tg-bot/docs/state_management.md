@@ -86,14 +86,19 @@ Middleware прикрепляется через `bot.on('message', middleware)`
 
 - `admin_guest_mode` — неавторизованный админский режим;
 - `admin_register_awaiting_login` — ожидание логина в `/admin_register`;
-- `admin_register_awaiting_password` — ожидание пароля в `/admin_register`.
+- `admin_register_awaiting_password` — ожидание пароля в `/admin_register`;
+- `admin_login_awaiting_login` — ожидание логина в `/admin_login`;
+- `admin_login_awaiting_password` — ожидание пароля в `/admin_login`;
+- `admin_authenticated` — авторизованный админский режим.
 
 Поведение:
 
 - при вводе `/admin` текущее состояние и `tempData` пользователя очищаются;
 - пользователь переходит в неавторизованный админский режим;
-- в этом режиме блокируются курьерские команды, кроме `/exit_admin`;
+- в этом режиме блокируются курьерские команды, кроме `/admin_login`, `/admin_register`, `/admin_logout`, `/exit_admin`, `/cancel`;
+- `/admin_login` запускает пошаговый сценарий входа админа (логин -> пароль -> `admin_authenticated`);
 - `/admin_register` запускает пошаговый сценарий регистрации админа (логин -> пароль -> запись в БД);
+- `/admin_logout` завершает авторизованную сессию админа и возвращает в `admin_guest_mode`;
 - `/exit_admin` очищает admin-state и возвращает пользователя в курьерский поток
   в зависимости от статуса профиля (зарегистрирован/активен, выбран склад,
   есть ли активная сессия).
