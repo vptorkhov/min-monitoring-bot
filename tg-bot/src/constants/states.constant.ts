@@ -38,7 +38,13 @@ export const AdminState = {
     LOGIN_AWAITING_PASSWORD: 'admin_login_awaiting_password',
     AUTHENTICATED: 'admin_authenticated',
     CREATE_WAREHOUSE_AWAITING_NAME: 'admin_create_warehouse_awaiting_name',
-    CREATE_WAREHOUSE_AWAITING_ADDRESS: 'admin_create_warehouse_awaiting_address'
+    CREATE_WAREHOUSE_AWAITING_ADDRESS: 'admin_create_warehouse_awaiting_address',
+    EDIT_WAREHOUSES_SELECTING: 'admin_edit_warehouses_selecting',
+    EDIT_WAREHOUSE_ACTION_SELECTING: 'admin_edit_warehouse_action_selecting',
+    EDIT_WAREHOUSE_AWAITING_NAME: 'admin_edit_warehouse_awaiting_name',
+    EDIT_WAREHOUSE_AWAITING_ADDRESS: 'admin_edit_warehouse_awaiting_address',
+    EDIT_WAREHOUSE_AWAITING_STATUS: 'admin_edit_warehouse_awaiting_status',
+    EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM: 'admin_edit_warehouse_awaiting_delete_confirm'
 } as const;
 
 // Тип для состояний админ-режима

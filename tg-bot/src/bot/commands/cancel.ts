@@ -71,6 +71,56 @@ export function registerCancelCommand(
             return;
         }
 
+        const isEditWarehouseEntryFlowState = currentState === AdminState.EDIT_WAREHOUSES_SELECTING
+            || currentState === AdminState.EDIT_WAREHOUSE_ACTION_SELECTING;
+        if (isEditWarehouseEntryFlowState) {
+            const tempData = stateManager.getUserTempData<{
+                adminId?: number;
+                adminPermissionsLevel?: number;
+                editReturnState?: string;
+            }>(userId);
+
+            const adminId = tempData?.adminId;
+            const adminPermissionsLevel = tempData?.adminPermissionsLevel;
+            const returnState = tempData?.editReturnState || AdminState.AUTHENTICATED;
+
+            stateManager.setUserState(userId, returnState);
+            stateManager.resetUserTempData(userId);
+            if (adminId && adminPermissionsLevel) {
+                stateManager.setUserTempData(userId, { adminId, adminPermissionsLevel });
+            }
+
+            await bot.sendMessage(chatId, '❌ Редактирование складов отменено. Вы возвращены в предыдущее состояние.');
+            return;
+        }
+
+        const isEditWarehouseSubflowState = currentState === AdminState.EDIT_WAREHOUSE_AWAITING_NAME
+            || currentState === AdminState.EDIT_WAREHOUSE_AWAITING_ADDRESS
+            || currentState === AdminState.EDIT_WAREHOUSE_AWAITING_STATUS
+            || currentState === AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM;
+        if (isEditWarehouseSubflowState) {
+            const tempData = stateManager.getUserTempData<{
+                adminId?: number;
+                adminPermissionsLevel?: number;
+                selectedWarehouseId?: number;
+                editWarehouses?: unknown[];
+                editReturnState?: string;
+            }>(userId);
+
+            stateManager.setUserState(userId, AdminState.EDIT_WAREHOUSE_ACTION_SELECTING);
+            stateManager.resetUserTempData(userId);
+            stateManager.setUserTempData(userId, {
+                adminId: tempData?.adminId,
+                adminPermissionsLevel: tempData?.adminPermissionsLevel,
+                selectedWarehouseId: tempData?.selectedWarehouseId,
+                editWarehouses: tempData?.editWarehouses,
+                editReturnState: tempData?.editReturnState
+            });
+
+            await bot.sendMessage(chatId, '❌ Действие отменено. Вы возвращены к выбору операции по складу.');
+            return;
+        }
+
         if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, userId, msg.text)) {
             return;
         }

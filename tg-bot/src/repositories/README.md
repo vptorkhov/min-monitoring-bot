@@ -21,8 +21,15 @@
 Репозиторий для работы с таблицей `warehouses`. Реализует:
 
 - `getActiveWarehouses()` — получение всех активных складов
+- `getAllWarehouses()` — получение всех складов (включая отключенные)
 - `getById()` — поиск склада по ID
 - `createWarehouse()` — создание нового активного склада (name, address)
+- `updateWarehouseName()` — обновление названия склада
+- `updateWarehouseAddress()` — обновление адреса склада
+- `updateWarehouseStatus()` — обновление признака активности склада (`is_active`)
+- `hasActiveSessionsByWarehouseId()` — проверка наличия активных сессий по складу
+- `hasAnySessionsByWarehouseId()` — проверка наличия любой истории сессий по складу
+- `deleteWarehouse()` — физическое удаление склада
 
 ### `mobility-device.repository.ts`
 

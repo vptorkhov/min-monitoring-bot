@@ -90,6 +90,13 @@ Middleware прикрепляется через `bot.on('message', middleware)`
 - `admin_login_awaiting_login` — ожидание логина в `/admin_login`;
 - `admin_login_awaiting_password` — ожидание пароля в `/admin_login`;
 - `admin_authenticated` — авторизованный админский режим.
+- `admin_create_warehouse_awaiting_name` / `admin_create_warehouse_awaiting_address` — шаги создания склада.
+- `admin_edit_warehouses_selecting` — ожидание номера склада в сценарии `/superadmin_edit_warehouses`.
+- `admin_edit_warehouse_action_selecting` — ожидание выбора действия для выбранного склада.
+- `admin_edit_warehouse_awaiting_name` — ожидание нового названия склада.
+- `admin_edit_warehouse_awaiting_address` — ожидание нового адреса склада.
+- `admin_edit_warehouse_awaiting_status` — ожидание нового статуса склада.
+- `admin_edit_warehouse_awaiting_delete_confirm` — ожидание подтверждения удаления склада (`ДА`).
 
 Поведение:
 
@@ -102,6 +109,14 @@ Middleware прикрепляется через `bot.on('message', middleware)`
 - `/exit_admin` очищает admin-state и возвращает пользователя в курьерский поток
   в зависимости от статуса профиля (зарегистрирован/активен, выбран склад,
   есть ли активная сессия).
+- `/superadmin_edit_warehouses` запускает многошаговый сценарий редактирования склада
+  (выбор склада -> выбор действия -> ввод значения/подтверждение), доступный только
+  для суперадмина (`permissions_level >= 2`).
+- `/cancel` в этом сценарии работает контекстно:
+  - на этапе выбора склада или выбора действия возвращает в состояние до запуска
+    `/superadmin_edit_warehouses`;
+  - на этапах ввода названия/адреса/статуса/подтверждения удаления возвращает к
+    выбору действия по выбранному складу.
 ### Важное поведение
 
 - Команды **никогда не мешают**: middleware не прерывает их выполнение.
