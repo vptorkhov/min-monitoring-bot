@@ -57,4 +57,13 @@ export class AdminRepository {
             [adminId, isLogin]
         );
     }
+
+    async updatePasswordHash(adminId: number, passwordHash: string): Promise<boolean> {
+        const result = await this.db.query(
+            'UPDATE admins SET password_hash = $2 WHERE id = $1',
+            [adminId, passwordHash]
+        );
+
+        return (result.rowCount ?? 0) > 0;
+    }
 }

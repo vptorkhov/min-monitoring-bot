@@ -15,6 +15,11 @@ export interface AdminLoginCandidate {
     isActive: boolean;
 }
 
+export interface AdminChangePasswordResult {
+    success: boolean;
+    reason?: string;
+}
+
 export class AdminService {
     private repository: AdminRepository;
 
@@ -107,5 +112,26 @@ export class AdminService {
 
     async setLoginStatus(adminId: number, isLogin: boolean): Promise<void> {
         await this.repository.updateLoginStatus(adminId, isLogin);
+    }
+
+    async changePassword(adminId: number, newPassword: string): Promise<AdminChangePasswordResult> {
+        const validation = this.validatePassword(newPassword);
+        if (!validation.isValid) {
+            return {
+                success: false,
+                reason: validation.error
+            };
+        }
+
+        const passwordHash = this.hashPassword(newPassword);
+        const updated = await this.repository.updatePasswordHash(adminId, passwordHash);
+        if (!updated) {
+            return {
+                success: false,
+                reason: 'Не удалось обновить пароль администратора.'
+            };
+        }
+
+        return { success: true };
     }
 }

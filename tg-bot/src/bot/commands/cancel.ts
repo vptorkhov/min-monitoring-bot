@@ -71,6 +71,22 @@ export function registerCancelCommand(
             return;
         }
 
+        const isChangePasswordFlowState = currentState === AdminState.CHANGE_PASSWORD_AWAITING_NEW;
+        if (isChangePasswordFlowState) {
+            const tempData = stateManager.getUserTempData<{ adminId?: number; adminPermissionsLevel?: number }>(userId);
+            const adminId = tempData?.adminId;
+            const adminPermissionsLevel = tempData?.adminPermissionsLevel;
+
+            stateManager.setUserState(userId, AdminState.AUTHENTICATED);
+            stateManager.resetUserTempData(userId);
+            if (adminId && adminPermissionsLevel) {
+                stateManager.setUserTempData(userId, { adminId, adminPermissionsLevel });
+            }
+
+            await bot.sendMessage(chatId, '❌ Смена пароля отменена. Вы возвращены в авторизованный админский режим.');
+            return;
+        }
+
         const isEditWarehouseEntryFlowState = currentState === AdminState.EDIT_WAREHOUSES_SELECTING
             || currentState === AdminState.EDIT_WAREHOUSE_ACTION_SELECTING;
         if (isEditWarehouseEntryFlowState) {

@@ -37,6 +37,7 @@ export const AdminState = {
     LOGIN_AWAITING_LOGIN: 'admin_login_awaiting_login',
     LOGIN_AWAITING_PASSWORD: 'admin_login_awaiting_password',
     AUTHENTICATED: 'admin_authenticated',
+    CHANGE_PASSWORD_AWAITING_NEW: 'admin_change_password_awaiting_new',
     CREATE_WAREHOUSE_AWAITING_NAME: 'admin_create_warehouse_awaiting_name',
     CREATE_WAREHOUSE_AWAITING_ADDRESS: 'admin_create_warehouse_awaiting_address',
     EDIT_WAREHOUSES_SELECTING: 'admin_edit_warehouses_selecting',

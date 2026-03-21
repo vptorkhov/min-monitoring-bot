@@ -80,12 +80,14 @@ function getAuthenticatedAdminWelcomeMessage(
       "✅ Вы успешно вошли как суперадмин.",
       "",
       "Доступные команды:",
+      "/admin_change_password",
       "/superadmin_create_warehouse",
       "/superadmin_edit_warehouses",
       "",
       "Общие команды админ-режима:",
       "/admin_logout",
       "/exit_admin",
+      "/cancel",
     ].join("\n");
   }
 
@@ -93,10 +95,12 @@ function getAuthenticatedAdminWelcomeMessage(
     "✅ Вы успешно вошли как админ.",
     "",
     "Доступные команды:",
-    "/admin_logout",
-    "/exit_admin",
+    "/admin_change_password",
     "",
     "Общие команды админ-режима:",
+    "/admin_logout",
+    "/exit_admin",
+    "/cancel",
   ].join("\n");
 }
 
@@ -144,6 +148,7 @@ export function registerAdminModeCommands(
   const isInAuthenticatedOrSubflow = (currentState?: string) => {
     return (
       currentState === AdminState.AUTHENTICATED ||
+      currentState === AdminState.CHANGE_PASSWORD_AWAITING_NEW ||
       currentState === AdminState.CREATE_WAREHOUSE_AWAITING_NAME ||
       currentState === AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS ||
       currentState === AdminState.EDIT_WAREHOUSES_SELECTING ||
@@ -280,6 +285,7 @@ export function registerAdminModeCommands(
     const adminId = tempData?.adminId;
     const wasAuthenticated =
       currentState === AdminState.AUTHENTICATED ||
+      currentState === AdminState.CHANGE_PASSWORD_AWAITING_NEW ||
       currentState === AdminState.CREATE_WAREHOUSE_AWAITING_NAME ||
       currentState === AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS ||
       currentState === AdminState.EDIT_WAREHOUSES_SELECTING ||
@@ -369,6 +375,45 @@ export function registerAdminModeCommands(
     }
 
     await startAdminRegistrationFlow(chatId, telegramId);
+  });
+
+  bot.onText(/^\/admin_change_password(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "ℹ️ Сначала войдите в админский режим командой /admin.",
+      );
+      return;
+    }
+
+    const currentState = stateManager.getUserState(telegramId);
+    if (!isInAuthenticatedOrSubflow(currentState)) {
+      await bot.sendMessage(
+        chatId,
+        "🔒 Эта команда доступна только авторизованному администратору. Используйте /admin_login.",
+      );
+      return;
+    }
+
+    const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId);
+    if (!tempData?.adminId) {
+      stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+      await bot.sendMessage(
+        chatId,
+        "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
+      );
+      return;
+    }
+
+    stateManager.setUserState(telegramId, AdminState.CHANGE_PASSWORD_AWAITING_NEW);
+    await bot.sendMessage(chatId, "Введите новый пароль, не менее 6 символов");
   });
 
   bot.onText(/^\/superadmin_create_warehouse(?:@\w+)?$/, async (msg) => {
@@ -626,6 +671,7 @@ export function registerAdminModeCommands(
       currentState !== AdminState.REGISTER_AWAITING_PASSWORD &&
       currentState !== AdminState.LOGIN_AWAITING_LOGIN &&
       currentState !== AdminState.LOGIN_AWAITING_PASSWORD &&
+      currentState !== AdminState.CHANGE_PASSWORD_AWAITING_NEW &&
       currentState !== AdminState.CREATE_WAREHOUSE_AWAITING_NAME &&
       currentState !== AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS &&
       currentState !== AdminState.EDIT_WAREHOUSES_SELECTING &&
@@ -770,6 +816,53 @@ export function registerAdminModeCommands(
         getAuthenticatedAdminWelcomeMessage(adminLoginPermissionsLevel),
       );
 
+      return;
+    }
+
+    if (currentState === AdminState.CHANGE_PASSWORD_AWAITING_NEW) {
+      const passwordInput = text.trim();
+      const passwordValidation = adminService.validatePassword(passwordInput);
+      if (!passwordValidation.isValid) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Пароль должен содержать минимум 6 символов.\n\nВведите новый пароль, не менее 6 символов",
+        );
+        return;
+      }
+
+      const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId);
+      const adminId = tempData?.adminId;
+      const adminPermissionsLevel = tempData?.adminPermissionsLevel;
+      if (!adminId || !adminPermissionsLevel) {
+        stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+        stateManager.resetUserTempData(telegramId);
+        await bot.sendMessage(
+          chatId,
+          "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
+        );
+        return;
+      }
+
+      const result = await adminService.changePassword(adminId, passwordInput);
+      if (!result.success) {
+        await bot.sendMessage(
+          chatId,
+          `❌ ${result.reason || "Не удалось сменить пароль."}\n\nВведите новый пароль, не менее 6 символов`,
+        );
+        return;
+      }
+
+      stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+      stateManager.resetUserTempData(telegramId);
+      stateManager.setUserTempData(telegramId, {
+        adminId,
+        adminPermissionsLevel,
+      });
+
+      await bot.sendMessage(
+        chatId,
+        "✅ Пароль успешно изменен. Вы остаетесь в авторизованном админ-режиме.",
+      );
       return;
     }
 
