@@ -9,6 +9,7 @@ import {
     getCourierIdleKeyboard,
     getSelectWarehouseKeyboard
 } from '../keyboards';
+import { blockIfAdminGuestCommandNotAllowed } from '../admin/admin-mode';
 
 export function registerStartCommand(
     bot: TelegramBot,
@@ -26,6 +27,10 @@ export function registerStartCommand(
         }
 
         const userId = msg.from.id;
+
+        if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, userId, msg.text)) {
+            return;
+        }
 
         try {
             // Проверяем, зарегистрирован ли курьер

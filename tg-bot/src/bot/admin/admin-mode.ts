@@ -1,0 +1,58 @@
+import TelegramBot from 'node-telegram-bot-api';
+import { extractCommand } from '../../constants/commands.constant';
+import { AdminState } from '../../constants/states.constant';
+import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
+import { stateManager } from '../state-manager';
+
+const ADMIN_GUEST_ALLOWED_COMMANDS = new Set<string>([
+    '/admin',
+    '/exit_admin',
+    '/admin_login',
+    '/admin_register'
+]);
+
+function normalizeInputToCommand(text?: string): string | null {
+    if (!text) {
+        return null;
+    }
+
+    const normalizedText = convertKeyboardButtonToCommand(text.trim());
+    return extractCommand(normalizedText);
+}
+
+export function isUserInAdminMode(telegramId: number): boolean {
+    return stateManager.getUserState(telegramId) === AdminState.GUEST_MODE;
+}
+
+export function enterAdminMode(telegramId: number): void {
+    // Полностью очищаем пользовательский процесс перед входом в админ-режим.
+    stateManager.clearUser(telegramId);
+    stateManager.setUserState(telegramId, AdminState.GUEST_MODE);
+}
+
+export function exitAdminMode(telegramId: number): void {
+    stateManager.clearUser(telegramId);
+}
+
+export async function blockIfAdminGuestCommandNotAllowed(
+    bot: TelegramBot,
+    chatId: number,
+    telegramId: number,
+    text?: string
+): Promise<boolean> {
+    if (!isUserInAdminMode(telegramId)) {
+        return false;
+    }
+
+    const command = normalizeInputToCommand(text);
+    if (command && ADMIN_GUEST_ALLOWED_COMMANDS.has(command)) {
+        return false;
+    }
+
+    await bot.sendMessage(
+        chatId,
+        '🔒 Сейчас включен админский режим (без входа). Доступны только команды: /admin_login, /admin_register, /exit_admin.'
+    );
+
+    return true;
+}

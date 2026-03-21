@@ -28,3 +28,11 @@ export const DeviceSessionState = {
 
 // Тип для состояний сессии устройства
 export type DeviceSessionStateType = typeof DeviceSessionState[keyof typeof DeviceSessionState];
+
+// Состояния админ-режима
+export const AdminState = {
+    GUEST_MODE: 'admin_guest_mode'
+} as const;
+
+// Тип для состояний админ-режима
+export type AdminStateType = typeof AdminState[keyof typeof AdminState];

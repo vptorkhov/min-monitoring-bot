@@ -16,6 +16,7 @@ import {
 } from '../keyboards';
 import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
 import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
+import { blockIfAdminGuestCommandNotAllowed } from '../admin/admin-mode';
 
 /**
  * Команда /set_warehouse
@@ -143,6 +144,10 @@ export function registerSetWarehouseCommand(
         const telegramId = msg.from?.id;
         if (!telegramId) return;
 
+        if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, telegramId, msg.text)) {
+            return;
+        }
+
         await startWarehouseSelection(chatId, telegramId);
     });
 
@@ -161,6 +166,10 @@ export function registerSetWarehouseCommand(
         }
 
         if (callbackData === INLINE_CALLBACK_DATA.SET_WAREHOUSE) {
+            if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, telegramId, '/set_warehouse')) {
+                return true;
+            }
+
             await startWarehouseSelection(chatId, telegramId);
             return true;
         }
@@ -192,6 +201,10 @@ export function registerSetWarehouseCommand(
         // Перехват reply-кнопки выбора склада как эквивалента /set_warehouse.
         // Поддерживаем оба текста: новый и исторический без пробела.
         if (textAsCommand === '/set_warehouse' && text !== '/set_warehouse') {
+            if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, telegramId, text)) {
+                return;
+            }
+
             await startWarehouseSelection(chatId, telegramId);
             return;
         }

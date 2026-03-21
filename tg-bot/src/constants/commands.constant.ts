@@ -11,7 +11,11 @@ export const BOT_COMMANDS = [
     '/set_warehouse',
     '/clear_warehouse',  // отвязаться от всех складов
     '/take_sim',      // взять средство индивидуальной мобильности
-    '/return_sim'     // сдать СИМ
+    '/return_sim',     // сдать СИМ
+    '/admin',
+    '/exit_admin',
+    '/admin_login',
+    '/admin_register'
     // здесь будут добавляться остальные команды
 ] as const;
 

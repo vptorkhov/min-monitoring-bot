@@ -6,6 +6,7 @@ import {
     stateManager
 } from '../state-manager';
 import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
+import { blockIfAdminGuestCommandNotAllowed } from '../admin/admin-mode';
 
 /**
  * Регистрация команды /cancel
@@ -27,6 +28,10 @@ export function registerCancelCommand(
         const userId = msg.from?.id;
 
         if (!userId) return;
+
+        if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, userId, msg.text)) {
+            return;
+        }
 
         let wasInProcess = false;
 

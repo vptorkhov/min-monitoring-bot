@@ -5,6 +5,7 @@ import { CallbackQueryHandler } from '../callback-router';
 import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
 import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
 import { INLINE_CALLBACK_DATA } from '../keyboards';
+import { blockIfAdminGuestCommandNotAllowed } from '../admin/admin-mode';
 
 const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
     remove_keyboard: true
@@ -59,6 +60,10 @@ export function registerClearWarehouseCommand(
         const telegramId = msg.from?.id;
         if (!telegramId) return;
 
+        if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, telegramId, msg.text)) {
+            return;
+        }
+
         await clearWarehouseFlow(chatId, telegramId);
     });
 
@@ -73,6 +78,10 @@ export function registerClearWarehouseCommand(
             return false;
         }
 
+        if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, telegramId, '/clear_warehouse')) {
+            return true;
+        }
+
         await clearWarehouseFlow(chatId, telegramId);
         return true;
     });
@@ -85,6 +94,10 @@ export function registerClearWarehouseCommand(
         const text = msg.text?.trim();
         const textAsCommand = text ? convertKeyboardButtonToCommand(text) : '';
         if (textAsCommand !== '/clear_warehouse' || text === '/clear_warehouse') {
+            return;
+        }
+
+        if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, telegramId, text)) {
             return;
         }
 
