@@ -33,7 +33,10 @@ export type DeviceSessionStateType = typeof DeviceSessionState[keyof typeof Devi
 export const AdminState = {
     GUEST_MODE: 'admin_guest_mode',
     REGISTER_AWAITING_LOGIN: 'admin_register_awaiting_login',
-    REGISTER_AWAITING_PASSWORD: 'admin_register_awaiting_password'
+    REGISTER_AWAITING_PASSWORD: 'admin_register_awaiting_password',
+    LOGIN_AWAITING_LOGIN: 'admin_login_awaiting_login',
+    LOGIN_AWAITING_PASSWORD: 'admin_login_awaiting_password',
+    AUTHENTICATED: 'admin_authenticated'
 } as const;
 
 // Тип для состояний админ-режима

@@ -8,13 +8,17 @@ const ADMIN_GUEST_ALLOWED_COMMANDS = new Set<string>([
     '/admin',
     '/exit_admin',
     '/admin_login',
-    '/admin_register'
+    '/admin_register',
+    '/cancel'
 ]);
 
 const ADMIN_MODE_STATES = new Set<string>([
     AdminState.GUEST_MODE,
     AdminState.REGISTER_AWAITING_LOGIN,
-    AdminState.REGISTER_AWAITING_PASSWORD
+    AdminState.REGISTER_AWAITING_PASSWORD,
+    AdminState.LOGIN_AWAITING_LOGIN,
+    AdminState.LOGIN_AWAITING_PASSWORD,
+    AdminState.AUTHENTICATED
 ]);
 
 function normalizeInputToCommand(text?: string): string | null {

@@ -40,4 +40,20 @@ export class AdminRepository {
 
         return result.rows[0] || null;
     }
+
+    async getByNicknameInsensitive(nickname: string): Promise<AdminFromDB | null> {
+        const result = await this.db.query<AdminFromDB>(
+            'SELECT * FROM admins WHERE LOWER(nickname) = LOWER($1) LIMIT 1',
+            [nickname]
+        );
+
+        return result.rows[0] || null;
+    }
+
+    async updateLoginStatus(adminId: number, isLogin: boolean): Promise<void> {
+        await this.db.query(
+            'UPDATE admins SET is_login = $2 WHERE id = $1',
+            [adminId, isLogin]
+        );
+    }
 }

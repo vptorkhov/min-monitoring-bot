@@ -7,6 +7,14 @@ export interface AdminRegistrationResult {
     duplicateInsensitive?: boolean;
 }
 
+export interface AdminLoginCandidate {
+    id: number;
+    nickname: string;
+    passwordHash: string;
+    permissionsLevel: number;
+    isActive: boolean;
+}
+
 export class AdminService {
     private repository: AdminRepository;
 
@@ -76,5 +84,28 @@ export class AdminService {
         }
 
         return { success: true };
+    }
+
+    async getLoginCandidate(login: string): Promise<AdminLoginCandidate | null> {
+        const admin = await this.repository.getByNicknameInsensitive(login.trim());
+        if (!admin) {
+            return null;
+        }
+
+        return {
+            id: admin.id,
+            nickname: admin.nickname,
+            passwordHash: admin.password_hash,
+            permissionsLevel: admin.permissions_level,
+            isActive: admin.is_active
+        };
+    }
+
+    verifyPassword(password: string, expectedHash: string): boolean {
+        return this.hashPassword(password) === expectedHash;
+    }
+
+    async setLoginStatus(adminId: number, isLogin: boolean): Promise<void> {
+        await this.repository.updateLoginStatus(adminId, isLogin);
     }
 }

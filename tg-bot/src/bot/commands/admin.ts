@@ -58,6 +58,13 @@ export function registerAdminModeCommands(
         await bot.sendMessage(chatId, 'Придумайте и введите логин');
     };
 
+    const startAdminLoginFlow = async (chatId: number, telegramId: number) => {
+        stateManager.setUserState(telegramId, AdminState.LOGIN_AWAITING_LOGIN);
+        stateManager.resetUserTempData(telegramId);
+
+        await bot.sendMessage(chatId, 'Введите логин');
+    };
+
     bot.onText(/^\/admin(?:@\w+)?$/, async (msg) => {
         const chatId = msg.chat.id;
         const telegramId = msg.from?.id;
@@ -117,7 +124,7 @@ export function registerAdminModeCommands(
             return;
         }
 
-        await bot.sendMessage(chatId, '🚧 Вход администратора пока не реализован.');
+        await startAdminLoginFlow(chatId, telegramId);
     });
 
     bot.onText(/^\/admin_register(?:@\w+)?$/, async (msg) => {
@@ -146,7 +153,9 @@ export function registerAdminModeCommands(
         const currentState = stateManager.getUserState(telegramId);
         if (
             currentState !== AdminState.REGISTER_AWAITING_LOGIN &&
-            currentState !== AdminState.REGISTER_AWAITING_PASSWORD
+            currentState !== AdminState.REGISTER_AWAITING_PASSWORD &&
+            currentState !== AdminState.LOGIN_AWAITING_LOGIN &&
+            currentState !== AdminState.LOGIN_AWAITING_PASSWORD
         ) {
             return;
         }
@@ -184,6 +193,87 @@ export function registerAdminModeCommands(
             stateManager.setUserTempDataField(telegramId, 'adminRegisterLogin', loginInput);
             stateManager.setUserState(telegramId, AdminState.REGISTER_AWAITING_PASSWORD);
             await bot.sendMessage(chatId, 'Придумайте и введите пароль. Требования - не менее 6 символов.');
+            return;
+        }
+
+        if (currentState === AdminState.LOGIN_AWAITING_LOGIN) {
+            const loginInput = text.trim();
+            const loginValidation = adminService.validateLogin(loginInput);
+            if (!loginValidation.isValid) {
+                await bot.sendMessage(chatId, `${loginValidation.error}\nПопробуйте снова.\n\nВведите логин`);
+                return;
+            }
+
+            const adminCandidate = await adminService.getLoginCandidate(loginInput);
+            if (!adminCandidate) {
+                await bot.sendMessage(
+                    chatId,
+                    'Пользователь с таким логином не найден.\n\nВведите логин'
+                );
+                return;
+            }
+
+            stateManager.setUserTempData(telegramId, {
+                adminLoginId: adminCandidate.id,
+                adminLoginNickname: adminCandidate.nickname,
+                adminLoginPasswordHash: adminCandidate.passwordHash,
+                adminLoginPermissionsLevel: adminCandidate.permissionsLevel,
+                adminLoginIsActive: adminCandidate.isActive
+            });
+            stateManager.setUserState(telegramId, AdminState.LOGIN_AWAITING_PASSWORD);
+            await bot.sendMessage(chatId, 'Введите пароль');
+            return;
+        }
+
+        if (currentState === AdminState.LOGIN_AWAITING_PASSWORD) {
+            const tempData = stateManager.getUserTempData<{
+                adminLoginId?: number;
+                adminLoginNickname?: string;
+                adminLoginPasswordHash?: string;
+                adminLoginPermissionsLevel?: number;
+                adminLoginIsActive?: boolean;
+            }>(telegramId);
+
+            const adminLoginId = tempData?.adminLoginId;
+            const adminLoginPasswordHash = tempData?.adminLoginPasswordHash;
+            const adminLoginPermissionsLevel = tempData?.adminLoginPermissionsLevel;
+            const adminLoginIsActive = tempData?.adminLoginIsActive;
+
+            if (!adminLoginId || !adminLoginPasswordHash || !adminLoginPermissionsLevel) {
+                await startAdminLoginFlow(chatId, telegramId);
+                return;
+            }
+
+            if (!adminLoginIsActive) {
+                await bot.sendMessage(
+                    chatId,
+                    '⏳ Ваш админ-аккаунт еще не активирован суперадминистратором.\n\nВведите логин'
+                );
+                stateManager.setUserState(telegramId, AdminState.LOGIN_AWAITING_LOGIN);
+                stateManager.resetUserTempData(telegramId);
+                return;
+            }
+
+            const isPasswordValid = adminService.verifyPassword(text, adminLoginPasswordHash);
+            if (!isPasswordValid) {
+                await bot.sendMessage(chatId, 'Неверный пароль\n\nВведите пароль');
+                return;
+            }
+
+            await adminService.setLoginStatus(adminLoginId, true);
+            stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+            stateManager.setUserTempData(telegramId, {
+                adminId: adminLoginId,
+                adminPermissionsLevel: adminLoginPermissionsLevel
+            });
+
+            await bot.sendMessage(
+                chatId,
+                adminLoginPermissionsLevel >= 2
+                    ? '✅ Вы успешно вошли как суперадмин.'
+                    : '✅ Вы успешно вошли как админ.'
+            );
+
             return;
         }
 
