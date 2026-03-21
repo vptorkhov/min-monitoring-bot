@@ -170,4 +170,4 @@ CREATE INDEX idx_admins_is_active ON admins(is_active);
 
 -- Создание суперадмина
 INSERT INTO admins (nickname, password_hash, permissions_level, is_active)
-VALUES ('superadmin', '28efb68dcba507ecd182bead31e4e2d159b0f9185861d1ebfe60a12dfb310300', 2, TRUE);
+VALUES ('superadmin', 'c0f65bf1f5cd710b92dd9274498c112c36f9118a707a15e5fdc09793f21f36c1', 2, TRUE);

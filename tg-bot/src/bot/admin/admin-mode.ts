@@ -11,6 +11,12 @@ const ADMIN_GUEST_ALLOWED_COMMANDS = new Set<string>([
     '/admin_register'
 ]);
 
+const ADMIN_MODE_STATES = new Set<string>([
+    AdminState.GUEST_MODE,
+    AdminState.REGISTER_AWAITING_LOGIN,
+    AdminState.REGISTER_AWAITING_PASSWORD
+]);
+
 function normalizeInputToCommand(text?: string): string | null {
     if (!text) {
         return null;
@@ -21,7 +27,8 @@ function normalizeInputToCommand(text?: string): string | null {
 }
 
 export function isUserInAdminMode(telegramId: number): boolean {
-    return stateManager.getUserState(telegramId) === AdminState.GUEST_MODE;
+    const state = stateManager.getUserState(telegramId);
+    return !!state && ADMIN_MODE_STATES.has(state);
 }
 
 export function enterAdminMode(telegramId: number): void {

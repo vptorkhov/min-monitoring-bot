@@ -31,6 +31,13 @@
 - `findById()` — поиск устройства по ID
 - `updateStatus()` — обновление статуса устройства (параметры: `status`, опционально `makeInactive`)
 
+### `admin.repository.ts`
+
+Репозиторий для работы с таблицей `admins`. Реализует:
+
+- `existsByNicknameInsensitive()` — проверка занятости логина без учета регистра
+- `createPendingAdmin()` — создание неактивного администратора (`permissions_level = 1`, `is_active = false`) с защитой от case-insensitive дублей
+
 ### `session.repository.ts`
 
 Репозиторий для работы с таблицей `session`. Реализует:

@@ -2,12 +2,16 @@ import TelegramBot from 'node-telegram-bot-api';
 import { RegistrationHandler } from '../handlers/registration.handler';
 import { CourierService } from '../../services/courier.service';
 import { SessionService } from '../../services/session.service';
+import { AdminService } from '../../services/admin.service';
 import {
     enterAdminMode,
     exitAdminMode,
     isUserInAdminMode
 } from '../admin/admin-mode';
 import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
+import { stateManager } from '../state-manager';
+import { isCommand } from '../../constants/commands.constant';
+import { AdminState } from '../../constants/states.constant';
 
 const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
     remove_keyboard: true
@@ -45,6 +49,15 @@ export function registerAdminModeCommands(
     registrationHandler: RegistrationHandler,
     sessionService: SessionService
 ) {
+    const adminService = new AdminService();
+
+    const startAdminRegistrationFlow = async (chatId: number, telegramId: number) => {
+        stateManager.setUserState(telegramId, AdminState.REGISTER_AWAITING_LOGIN);
+        stateManager.resetUserTempData(telegramId);
+
+        await bot.sendMessage(chatId, 'Придумайте и введите логин');
+    };
+
     bot.onText(/^\/admin(?:@\w+)?$/, async (msg) => {
         const chatId = msg.chat.id;
         const telegramId = msg.from?.id;
@@ -120,6 +133,99 @@ export function registerAdminModeCommands(
             return;
         }
 
-        await bot.sendMessage(chatId, '🚧 Регистрация администратора пока не реализована.');
+        await startAdminRegistrationFlow(chatId, telegramId);
+    });
+
+    bot.on('message', async (msg) => {
+        const chatId = msg.chat.id;
+        const telegramId = msg.from?.id;
+        if (!telegramId) {
+            return;
+        }
+
+        const currentState = stateManager.getUserState(telegramId);
+        if (
+            currentState !== AdminState.REGISTER_AWAITING_LOGIN &&
+            currentState !== AdminState.REGISTER_AWAITING_PASSWORD
+        ) {
+            return;
+        }
+
+        const text = msg.text || '';
+        if (!text) {
+            return;
+        }
+
+        // Команды в ходе регистрации не перехватываем, их обрабатывают command-handlers.
+        if (isCommand(text)) {
+            return;
+        }
+
+        if (currentState === AdminState.REGISTER_AWAITING_LOGIN) {
+            const loginInput = text.trim();
+            const loginValidation = adminService.validateLogin(loginInput);
+            if (!loginValidation.isValid) {
+                await bot.sendMessage(
+                    chatId,
+                    `${loginValidation.error}\nПопробуйте снова.\n\nПридумайте и введите логин`
+                );
+                return;
+            }
+
+            const isTaken = await adminService.isLoginTakenInsensitive(loginInput);
+            if (isTaken) {
+                await bot.sendMessage(
+                    chatId,
+                    'Логин уже занят (без учета регистра). Выберите другой.\n\nПридумайте и введите логин'
+                );
+                return;
+            }
+
+            stateManager.setUserTempDataField(telegramId, 'adminRegisterLogin', loginInput);
+            stateManager.setUserState(telegramId, AdminState.REGISTER_AWAITING_PASSWORD);
+            await bot.sendMessage(chatId, 'Придумайте и введите пароль. Требования - не менее 6 символов.');
+            return;
+        }
+
+        const passwordValidation = adminService.validatePassword(text);
+        if (!passwordValidation.isValid) {
+            await bot.sendMessage(
+                chatId,
+                'Пароль не соответствует требованиям.\nПридумайте и введите пароль. Требования - не менее 6 символов.'
+            );
+            return;
+        }
+
+        const tempData = stateManager.getUserTempData<{ adminRegisterLogin?: string }>(telegramId);
+        const adminRegisterLogin = tempData?.adminRegisterLogin;
+
+        if (!adminRegisterLogin) {
+            await startAdminRegistrationFlow(chatId, telegramId);
+            return;
+        }
+
+        const registrationResult = await adminService.registerPendingAdmin(adminRegisterLogin, text);
+        if (!registrationResult.success) {
+            if (registrationResult.duplicateInsensitive) {
+                await bot.sendMessage(
+                    chatId,
+                    'Логин уже занят (без учета регистра). Выберите другой.\n\nПридумайте и введите логин'
+                );
+                stateManager.setUserState(telegramId, AdminState.REGISTER_AWAITING_LOGIN);
+                stateManager.resetUserTempData(telegramId);
+                return;
+            }
+
+            await bot.sendMessage(chatId, '❌ Не удалось зарегистрировать администратора. Попробуйте позже.');
+            return;
+        }
+
+        stateManager.setUserState(telegramId, AdminState.GUEST_MODE);
+        stateManager.resetUserTempData(telegramId);
+
+        await bot.sendMessage(
+            chatId,
+            '✅ Заявка администратора создана. Ожидайте одобрения суперадминистратором.\n\n🛡 Вы по-прежнему в админском режиме. Доступны: /admin_login, /admin_register, /exit_admin.'
+        );
     });
 }
