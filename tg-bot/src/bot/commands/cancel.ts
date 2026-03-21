@@ -54,6 +54,23 @@ export function registerCancelCommand(
             return;
         }
 
+        const isCreateWarehouseFlowState = currentState === AdminState.CREATE_WAREHOUSE_AWAITING_NAME
+            || currentState === AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS;
+        if (isCreateWarehouseFlowState) {
+            const tempData = stateManager.getUserTempData<{ adminId?: number; adminPermissionsLevel?: number }>(userId);
+            const adminId = tempData?.adminId;
+            const adminPermissionsLevel = tempData?.adminPermissionsLevel;
+
+            stateManager.setUserState(userId, AdminState.AUTHENTICATED);
+            stateManager.resetUserTempData(userId);
+            if (adminId && adminPermissionsLevel) {
+                stateManager.setUserTempData(userId, { adminId, adminPermissionsLevel });
+            }
+
+            await bot.sendMessage(chatId, '❌ Создание склада отменено. Вы возвращены в авторизованный админский режим.');
+            return;
+        }
+
         if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, userId, msg.text)) {
             return;
         }

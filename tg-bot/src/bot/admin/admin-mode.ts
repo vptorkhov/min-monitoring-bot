@@ -19,7 +19,9 @@ const ADMIN_MODE_STATES = new Set<string>([
     AdminState.REGISTER_AWAITING_PASSWORD,
     AdminState.LOGIN_AWAITING_LOGIN,
     AdminState.LOGIN_AWAITING_PASSWORD,
-    AdminState.AUTHENTICATED
+    AdminState.AUTHENTICATED,
+    AdminState.CREATE_WAREHOUSE_AWAITING_NAME,
+    AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS
 ]);
 
 function normalizeInputToCommand(text?: string): string | null {

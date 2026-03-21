@@ -142,12 +142,11 @@ CREATE TABLE IF NOT EXISTS admins (
     permissions_level INTEGER DEFAULT 1,
     is_active BOOLEAN NOT NULL DEFAULT FALSE,
     is_login BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    warehouse_id INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_admin_warehouse FOREIGN KEY (warehouse_id)
+        REFERENCES warehouse(id) ON DELETE SET NULL
 );
-
--- Добавляем поле при обновлении уже существующей таблицы
-ALTER TABLE admins
-ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Комментарии к таблице и колонкам
 COMMENT ON TABLE admins IS 'Администраторы системы';
@@ -157,6 +156,7 @@ COMMENT ON COLUMN admins.password_hash IS 'Хеш пароля';
 COMMENT ON COLUMN admins.permissions_level IS 'Уровень доступа (1 - обычный, 2 - суперадмин)';
 COMMENT ON COLUMN admins.is_active IS 'Активен ли администратор (допущен к работе)';
 COMMENT ON COLUMN admins.is_login IS 'Статус авторизации';
+COMMENT ON COLUMN admins.warehouse_id IS 'ID склада, к которому привязан администратор (NULL если не привязан)';
 COMMENT ON COLUMN admins.created_at IS 'Дата создания записи';
 
 -- Индекс для поиска по никнейму
@@ -167,6 +167,9 @@ CREATE INDEX idx_admins_permissions ON admins(permissions_level);
 
 -- Индекс для фильтрации по активности
 CREATE INDEX idx_admins_is_active ON admins(is_active);
+
+-- Индекс для поиска по складу
+CREATE INDEX idx_admins_warehouse_id ON admins(warehouse_id);
 
 -- Создание суперадмина
 INSERT INTO admins (nickname, password_hash, permissions_level, is_active)

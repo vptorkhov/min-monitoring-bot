@@ -16,7 +16,8 @@ export const BOT_COMMANDS = [
     '/exit_admin',
     '/admin_logout',
     '/admin_login',
-    '/admin_register'
+    '/admin_register',
+    '/superadmin_create_warehouse'
     // здесь будут добавляться остальные команды
 ] as const;
 

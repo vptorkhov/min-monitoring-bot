@@ -20,8 +20,9 @@
 
 Репозиторий для работы с таблицей `warehouses`. Реализует:
 
-- `findAllActive()` — получение всех активных складов
-- `findById()` — поиск склада по ID
+- `getActiveWarehouses()` — получение всех активных складов
+- `getById()` — поиск склада по ID
+- `createWarehouse()` — создание нового активного склада (name, address)
 
 ### `mobility-device.repository.ts`
 

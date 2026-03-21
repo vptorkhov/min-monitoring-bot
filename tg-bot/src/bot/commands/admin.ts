@@ -3,6 +3,8 @@ import { RegistrationHandler } from '../handlers/registration.handler';
 import { CourierService } from '../../services/courier.service';
 import { SessionService } from '../../services/session.service';
 import { AdminService } from '../../services/admin.service';
+import { WarehouseService } from '../../services/warehouse.service';
+import { WarehouseRepository } from '../../repositories/warehouse.repository';
 import {
     enterAdminMode,
     exitAdminMode,
@@ -50,6 +52,7 @@ export function registerAdminModeCommands(
     sessionService: SessionService
 ) {
     const adminService = new AdminService();
+    const warehouseService = new WarehouseService(new WarehouseRepository());
 
     const startAdminRegistrationFlow = async (chatId: number, telegramId: number) => {
         stateManager.setUserState(telegramId, AdminState.REGISTER_AWAITING_LOGIN);
@@ -101,7 +104,9 @@ export function registerAdminModeCommands(
         const currentState = stateManager.getUserState(telegramId);
         const tempData = stateManager.getUserTempData<{ adminId?: number }>(telegramId);
         const adminId = tempData?.adminId;
-        const wasAuthenticated = currentState === AdminState.AUTHENTICATED;
+        const wasAuthenticated = currentState === AdminState.AUTHENTICATED
+            || currentState === AdminState.CREATE_WAREHOUSE_AWAITING_NAME
+            || currentState === AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS;
 
         if (wasAuthenticated && adminId) {
             await adminService.setLoginStatus(adminId, false);
@@ -176,6 +181,43 @@ export function registerAdminModeCommands(
         await startAdminRegistrationFlow(chatId, telegramId);
     });
 
+    bot.onText(/^\/superadmin_create_warehouse(?:@\w+)?$/, async (msg) => {
+        const chatId = msg.chat.id;
+        const telegramId = msg.from?.id;
+
+        if (!telegramId) {
+            return;
+        }
+
+        if (!isUserInAdminMode(telegramId)) {
+            return;
+        }
+
+        const currentState = stateManager.getUserState(telegramId);
+        const isInAuthenticatedOrSubflow = currentState === AdminState.AUTHENTICATED
+            || currentState === AdminState.CREATE_WAREHOUSE_AWAITING_NAME
+            || currentState === AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS;
+
+        if (!isInAuthenticatedOrSubflow) {
+            await bot.sendMessage(
+                chatId,
+                '🔒 Эта команда доступна только авторизованному администратору. Используйте /admin_login.'
+            );
+            return;
+        }
+
+        const tempData = stateManager.getUserTempData<{ adminPermissionsLevel?: number }>(telegramId);
+        const permissionsLevel = tempData?.adminPermissionsLevel ?? 0;
+
+        if (permissionsLevel < 2) {
+            await bot.sendMessage(chatId, '🚫 Нет прав на эту команду.');
+            return;
+        }
+
+        stateManager.setUserState(telegramId, AdminState.CREATE_WAREHOUSE_AWAITING_NAME);
+        await bot.sendMessage(chatId, 'Введите название склада');
+    });
+
     bot.on('message', async (msg) => {
         const chatId = msg.chat.id;
         const telegramId = msg.from?.id;
@@ -188,7 +230,9 @@ export function registerAdminModeCommands(
             currentState !== AdminState.REGISTER_AWAITING_LOGIN &&
             currentState !== AdminState.REGISTER_AWAITING_PASSWORD &&
             currentState !== AdminState.LOGIN_AWAITING_LOGIN &&
-            currentState !== AdminState.LOGIN_AWAITING_PASSWORD
+            currentState !== AdminState.LOGIN_AWAITING_PASSWORD &&
+            currentState !== AdminState.CREATE_WAREHOUSE_AWAITING_NAME &&
+            currentState !== AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS
         ) {
             return;
         }
@@ -307,6 +351,57 @@ export function registerAdminModeCommands(
                     : '✅ Вы успешно вошли как админ.'
             );
 
+            return;
+        }
+
+        if (currentState === AdminState.CREATE_WAREHOUSE_AWAITING_NAME) {
+            const nameInput = text.trim();
+            if (nameInput.length < 2) {
+                await bot.sendMessage(chatId, '❌ Название должно содержать минимум 2 символа.\n\nВведите название склада');
+                return;
+            }
+
+            stateManager.setUserTempDataField(telegramId, 'createWarehouseName', nameInput);
+            stateManager.setUserState(telegramId, AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS);
+            await bot.sendMessage(chatId, 'Введите адрес склада');
+            return;
+        }
+
+        if (currentState === AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS) {
+            const addressInput = text.trim();
+            if (addressInput.length < 2) {
+                await bot.sendMessage(chatId, '❌ Адрес должен содержать минимум 2 символа.\n\nВведите адрес склада');
+                return;
+            }
+
+            const tempData = stateManager.getUserTempData<{
+                adminId?: number;
+                adminPermissionsLevel?: number;
+                createWarehouseName?: string;
+            }>(telegramId);
+            const warehouseName = tempData?.createWarehouseName;
+            const adminId = tempData?.adminId;
+            const adminPermissionsLevel = tempData?.adminPermissionsLevel;
+
+            if (!warehouseName) {
+                stateManager.setUserState(telegramId, AdminState.CREATE_WAREHOUSE_AWAITING_NAME);
+                await bot.sendMessage(chatId, '⚠️ Что-то пошло не так. Введите название склада');
+                return;
+            }
+
+            const warehouse = await warehouseService.createWarehouse(warehouseName, addressInput);
+
+            stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+            stateManager.resetUserTempData(telegramId);
+            if (adminId && adminPermissionsLevel) {
+                stateManager.setUserTempData(telegramId, { adminId, adminPermissionsLevel });
+            }
+
+            await bot.sendMessage(
+                chatId,
+                `✅ Успешно создан склад *${warehouse.name}* по адресу *${warehouse.address}*`,
+                { parse_mode: 'Markdown' }
+            );
             return;
         }
 

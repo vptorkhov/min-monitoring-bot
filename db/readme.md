@@ -74,7 +74,10 @@
 - **permissions_level** INTEGER DEFAULT 1 (1 — обычный, 2 — суперадмин)
 - **is_active** BOOLEAN NOT NULL DEFAULT FALSE — флаг допуска администратора (после одобрения суперадмином)
 - **is_login** BOOLEAN DEFAULT FALSE
+- **warehouse_id** INTEGER REFERENCES warehouse(id) ON DELETE SET NULL — привязка к складу (NULL если не выбран)
 - **created_at** TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+Индексы: `idx_admins_nickname`, `idx_admins_permissions`, `idx_admins_is_active`, `idx_admins_warehouse_id`.
 
 После инициализации создаётся суперадмин `superadmin` с предустановленным хешем пароля.
 

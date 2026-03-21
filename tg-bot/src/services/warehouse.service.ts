@@ -25,4 +25,9 @@ export class WarehouseService {
         const warehouse = await this.getWarehouseById(id);
         return warehouse !== null && warehouse.is_active;
     }
+
+    // Создать новый склад
+    public async createWarehouse(name: string, address: string): Promise<Warehouse> {
+        return await this.warehouseRepository.createWarehouse(name, address);
+    }
 }

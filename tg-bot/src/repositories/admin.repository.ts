@@ -8,6 +8,7 @@ export interface AdminFromDB {
     permissions_level: number;
     is_active: boolean;
     is_login: boolean;
+    warehouse_id: number | null;
     created_at: Date;
 }
 

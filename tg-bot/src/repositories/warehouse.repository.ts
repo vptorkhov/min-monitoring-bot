@@ -19,4 +19,15 @@ export class WarehouseRepository {
         const { rows } = await this.db.query<Warehouse>(query, [id]);
         return rows[0] ?? null;
     }
+
+    // Создать новый склад
+    public async createWarehouse(name: string, address: string): Promise<Warehouse> {
+        const query = `
+            INSERT INTO warehouse (name, address, is_active)
+            VALUES ($1, $2, true)
+            RETURNING id, name, address, is_active
+        `;
+        const { rows } = await this.db.query<Warehouse>(query, [name, address]);
+        return rows[0];
+    }
 }

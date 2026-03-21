@@ -36,7 +36,9 @@ export const AdminState = {
     REGISTER_AWAITING_PASSWORD: 'admin_register_awaiting_password',
     LOGIN_AWAITING_LOGIN: 'admin_login_awaiting_login',
     LOGIN_AWAITING_PASSWORD: 'admin_login_awaiting_password',
-    AUTHENTICATED: 'admin_authenticated'
+    AUTHENTICATED: 'admin_authenticated',
+    CREATE_WAREHOUSE_AWAITING_NAME: 'admin_create_warehouse_awaiting_name',
+    CREATE_WAREHOUSE_AWAITING_ADDRESS: 'admin_create_warehouse_awaiting_address'
 } as const;
 
 // Тип для состояний админ-режима
