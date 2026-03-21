@@ -1,916 +1,1171 @@
-import TelegramBot from 'node-telegram-bot-api';
-import { RegistrationHandler } from '../handlers/registration.handler';
-import { CourierService } from '../../services/courier.service';
-import { SessionService } from '../../services/session.service';
-import { AdminService } from '../../services/admin.service';
-import { WarehouseService } from '../../services/warehouse.service';
-import { WarehouseRepository } from '../../repositories/warehouse.repository';
+import TelegramBot from "node-telegram-bot-api";
+import { RegistrationHandler } from "../handlers/registration.handler";
+import { CourierService } from "../../services/courier.service";
+import { SessionService } from "../../services/session.service";
+import { AdminService } from "../../services/admin.service";
+import { WarehouseService } from "../../services/warehouse.service";
+import { WarehouseRepository } from "../../repositories/warehouse.repository";
 import {
-    enterAdminMode,
-    exitAdminMode,
-    isUserInAdminMode
-} from '../admin/admin-mode';
-import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
-import { stateManager } from '../state-manager';
-import { isCommand } from '../../constants/commands.constant';
-import { AdminState } from '../../constants/states.constant';
-import { Warehouse } from '../../repositories/types/warehouse.type';
+  enterAdminMode,
+  exitAdminMode,
+  isUserInAdminMode,
+} from "../admin/admin-mode";
+import { sendCourierMainKeyboard } from "../keyboards/courier-main-keyboard";
+import { stateManager } from "../state-manager";
+import { isCommand } from "../../constants/commands.constant";
+import { AdminState } from "../../constants/states.constant";
+import { Warehouse } from "../../repositories/types/warehouse.type";
 
 const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
-    remove_keyboard: true
+  remove_keyboard: true,
 };
 
 type AdminSessionData = {
-    adminId?: number;
-    adminPermissionsLevel?: number;
-    createWarehouseName?: string;
-    editWarehouses?: Warehouse[];
-    selectedWarehouseId?: number;
-    editReturnState?: string;
+  adminId?: number;
+  adminPermissionsLevel?: number;
+  createWarehouseName?: string;
+  editWarehouses?: Warehouse[];
+  selectedWarehouseId?: number;
+  editReturnState?: string;
 };
 
 function escapeMarkdown(text: string): string {
-    return text.replace(/[_*\[\]()~`>#+\-=|{}.!\\]/g, '\\$&');
+  return text.replace(/[_*\[\]()~`>#+\-=|{}.!\\]/g, "\\$&");
 }
 
 function escapeHtml(text: string): string {
-    return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function getWarehouseStatusText(isActive: boolean): string {
-    return isActive ? 'Активный' : 'Отключен';
+  return isActive ? "Активный" : "Отключен";
 }
 
 function parseWarehouseStatusInput(input: string): boolean | null {
-    const normalized = input.trim().toLowerCase().replace(/\s+/g, ' ');
+  const normalized = input.trim().toLowerCase().replace(/\s+/g, " ");
 
-    if (
-        normalized === '1'
-        || normalized === '1.'
-        || normalized === 'активный'
-        || normalized === '1 активный'
-        || normalized === '1. активный'
-    ) {
-        return true;
-    }
+  if (
+    normalized === "1" ||
+    normalized === "1." ||
+    normalized === "активный" ||
+    normalized === "1 активный" ||
+    normalized === "1. активный"
+  ) {
+    return true;
+  }
 
-    if (
-        normalized === '2'
-        || normalized === '2.'
-        || normalized === 'отключен'
-        || normalized === '2 отключен'
-        || normalized === '2. отключен'
-    ) {
-        return false;
-    }
+  if (
+    normalized === "2" ||
+    normalized === "2." ||
+    normalized === "отключен" ||
+    normalized === "2 отключен" ||
+    normalized === "2. отключен"
+  ) {
+    return false;
+  }
 
-    return null;
+  return null;
+}
+
+function getAuthenticatedAdminWelcomeMessage(
+  adminPermissionsLevel: number,
+): string {
+  if (adminPermissionsLevel >= 2) {
+    return [
+      "✅ Вы успешно вошли как суперадмин.",
+      "",
+      "Доступные команды:",
+      "/superadmin_create_warehouse",
+      "/superadmin_edit_warehouses",
+      "",
+      "Общие команды админ-режима:",
+      "/admin_logout",
+      "/exit_admin",
+    ].join("\n");
+  }
+
+  return [
+    "✅ Вы успешно вошли как админ.",
+    "",
+    "Доступные команды:",
+    "/admin_logout",
+    "/exit_admin",
+    "",
+    "Общие команды админ-режима:",
+  ].join("\n");
 }
 
 async function restoreCourierFlowAfterExitAdmin(
-    bot: TelegramBot,
-    chatId: number,
-    telegramId: number,
-    courierService: CourierService,
-    registrationHandler: RegistrationHandler,
-    sessionService: SessionService
+  bot: TelegramBot,
+  chatId: number,
+  telegramId: number,
+  courierService: CourierService,
+  registrationHandler: RegistrationHandler,
+  sessionService: SessionService,
 ): Promise<void> {
-    const check = await courierService.checkCourierExists(telegramId);
+  const check = await courierService.checkCourierExists(telegramId);
 
-    if (!check.exists) {
-        await registrationHandler.startRegistration(chatId, telegramId);
-        return;
-    }
+  if (!check.exists) {
+    await registrationHandler.startRegistration(chatId, telegramId);
+    return;
+  }
 
-    if (!check.isActive) {
-        await bot.sendMessage(
-            chatId,
-            '⏳ Ваш курьерский аккаунт ещё не активирован администратором. Доступные команды: /start и /admin.'
-        );
-        return;
-    }
+  if (!check.isActive) {
+    await bot.sendMessage(
+      chatId,
+      "⏳ Ваш курьерский аккаунт ещё не активирован администратором. Доступные команды: /start и /admin.",
+    );
+    return;
+  }
 
-    await sendCourierMainKeyboard(bot, chatId, telegramId, courierService, sessionService);
+  await sendCourierMainKeyboard(
+    bot,
+    chatId,
+    telegramId,
+    courierService,
+    sessionService,
+  );
 }
 
 export function registerAdminModeCommands(
-    bot: TelegramBot,
-    courierService: CourierService,
-    registrationHandler: RegistrationHandler,
-    sessionService: SessionService
+  bot: TelegramBot,
+  courierService: CourierService,
+  registrationHandler: RegistrationHandler,
+  sessionService: SessionService,
 ) {
-    const adminService = new AdminService();
-    const warehouseService = new WarehouseService(new WarehouseRepository());
+  const adminService = new AdminService();
+  const warehouseService = new WarehouseService(new WarehouseRepository());
 
-    const isInAuthenticatedOrSubflow = (currentState?: string) => {
-        return currentState === AdminState.AUTHENTICATED
-            || currentState === AdminState.CREATE_WAREHOUSE_AWAITING_NAME
-            || currentState === AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS
-            || currentState === AdminState.EDIT_WAREHOUSES_SELECTING
-            || currentState === AdminState.EDIT_WAREHOUSE_ACTION_SELECTING
-            || currentState === AdminState.EDIT_WAREHOUSE_AWAITING_NAME
-            || currentState === AdminState.EDIT_WAREHOUSE_AWAITING_ADDRESS
-            || currentState === AdminState.EDIT_WAREHOUSE_AWAITING_STATUS
-            || currentState === AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM;
-    };
+  const isInAuthenticatedOrSubflow = (currentState?: string) => {
+    return (
+      currentState === AdminState.AUTHENTICATED ||
+      currentState === AdminState.CREATE_WAREHOUSE_AWAITING_NAME ||
+      currentState === AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS ||
+      currentState === AdminState.EDIT_WAREHOUSES_SELECTING ||
+      currentState === AdminState.EDIT_WAREHOUSE_ACTION_SELECTING ||
+      currentState === AdminState.EDIT_WAREHOUSE_AWAITING_NAME ||
+      currentState === AdminState.EDIT_WAREHOUSE_AWAITING_ADDRESS ||
+      currentState === AdminState.EDIT_WAREHOUSE_AWAITING_STATUS ||
+      currentState === AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM
+    );
+  };
 
-    const restoreToAuthenticatedWithAdminContext = (telegramId: number, tempData: AdminSessionData) => {
-        stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
-        stateManager.resetUserTempData(telegramId);
+  const restoreToAuthenticatedWithAdminContext = (
+    telegramId: number,
+    tempData: AdminSessionData,
+  ) => {
+    stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+    stateManager.resetUserTempData(telegramId);
 
-        if (tempData.adminId && tempData.adminPermissionsLevel) {
-            stateManager.setUserTempData(telegramId, {
-                adminId: tempData.adminId,
-                adminPermissionsLevel: tempData.adminPermissionsLevel
-            });
-        }
-    };
+    if (tempData.adminId && tempData.adminPermissionsLevel) {
+      stateManager.setUserTempData(telegramId, {
+        adminId: tempData.adminId,
+        adminPermissionsLevel: tempData.adminPermissionsLevel,
+      });
+    }
+  };
 
-    const sendWarehouseActionsMessage = async (chatId: number, warehouse: Warehouse) => {
-        const safeName = escapeHtml(warehouse.name);
-        const safeAddress = escapeHtml(warehouse.address || '-');
-        const status = getWarehouseStatusText(warehouse.is_active);
-        const commandsList = [
-            '<code>/superadmin_edit_warehouse_name</code>',
-            '<code>/superadmin_edit_warehouse_address</code>',
-            '<code>/superadmin_edit_warehouse_status</code>',
-            '<code>/superadmin_edit_warehouse_delete</code>'
-        ].join('\n');
+  const sendWarehouseActionsMessage = async (
+    chatId: number,
+    warehouse: Warehouse,
+  ) => {
+    const safeName = escapeHtml(warehouse.name);
+    const safeAddress = escapeHtml(warehouse.address || "-");
+    const status = getWarehouseStatusText(warehouse.is_active);
+    const commandsList = [
+      "<code>/superadmin_edit_warehouse_name</code>",
+      "<code>/superadmin_edit_warehouse_address</code>",
+      "<code>/superadmin_edit_warehouse_status</code>",
+      "<code>/superadmin_edit_warehouse_delete</code>",
+    ].join("\n");
 
+    await bot.sendMessage(
+      chatId,
+      `Выбран склад:\n<b>${safeName}</b> - <b>${safeAddress}</b>\nСтатус: <b>${status}</b>\n\nДоступные действия:\n${commandsList}`,
+      { parse_mode: "HTML" },
+    );
+  };
+
+  const tryResolveSelectedWarehouse = async (
+    telegramId: number,
+    chatId: number,
+  ): Promise<{ tempData: AdminSessionData; warehouse: Warehouse } | null> => {
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    const selectedWarehouseId = tempData.selectedWarehouseId;
+
+    if (!selectedWarehouseId) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.",
+      );
+      return null;
+    }
+
+    const warehouse =
+      await warehouseService.getWarehouseById(selectedWarehouseId);
+    if (!warehouse) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Выбранный склад не найден. Запустите /superadmin_edit_warehouses заново.",
+      );
+      return null;
+    }
+
+    return { tempData, warehouse };
+  };
+
+  const startAdminRegistrationFlow = async (
+    chatId: number,
+    telegramId: number,
+  ) => {
+    stateManager.setUserState(telegramId, AdminState.REGISTER_AWAITING_LOGIN);
+    stateManager.resetUserTempData(telegramId);
+
+    await bot.sendMessage(chatId, "Придумайте и введите логин");
+  };
+
+  const startAdminLoginFlow = async (chatId: number, telegramId: number) => {
+    stateManager.setUserState(telegramId, AdminState.LOGIN_AWAITING_LOGIN);
+    stateManager.resetUserTempData(telegramId);
+
+    await bot.sendMessage(chatId, "Введите логин");
+  };
+
+  bot.onText(/^\/admin(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    const wasInAdminMode = isUserInAdminMode(telegramId);
+    enterAdminMode(telegramId);
+
+    await bot.sendMessage(
+      chatId,
+      wasInAdminMode
+        ? "🛡 Вы уже в админском режиме. Доступны: /admin_login, /admin_register, /admin_logout, /exit_admin."
+        : "🛡 Включен админский режим. Текущий курьерский сценарий остановлен. Доступны: /admin_login, /admin_register, /admin_logout, /exit_admin.",
+      { reply_markup: HIDE_REPLY_KEYBOARD },
+    );
+  });
+
+  bot.onText(/^\/admin_logout(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "ℹ️ Сначала войдите в админский режим командой /admin.",
+      );
+      return;
+    }
+
+    const currentState = stateManager.getUserState(telegramId);
+    const tempData = stateManager.getUserTempData<{ adminId?: number }>(
+      telegramId,
+    );
+    const adminId = tempData?.adminId;
+    const wasAuthenticated =
+      currentState === AdminState.AUTHENTICATED ||
+      currentState === AdminState.CREATE_WAREHOUSE_AWAITING_NAME ||
+      currentState === AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS ||
+      currentState === AdminState.EDIT_WAREHOUSES_SELECTING ||
+      currentState === AdminState.EDIT_WAREHOUSE_ACTION_SELECTING ||
+      currentState === AdminState.EDIT_WAREHOUSE_AWAITING_NAME ||
+      currentState === AdminState.EDIT_WAREHOUSE_AWAITING_ADDRESS ||
+      currentState === AdminState.EDIT_WAREHOUSE_AWAITING_STATUS ||
+      currentState === AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM;
+
+    if (wasAuthenticated && adminId) {
+      await adminService.setLoginStatus(adminId, false);
+    }
+
+    stateManager.setUserState(telegramId, AdminState.GUEST_MODE);
+    stateManager.resetUserTempData(telegramId);
+
+    await bot.sendMessage(
+      chatId,
+      wasAuthenticated
+        ? "✅ Вы вышли из авторизованного админ-режима и возвращены в предадминское состояние. Доступны: /admin_login, /admin_register, /admin_logout, /exit_admin."
+        : "ℹ️ Вы уже находитесь в предадминском состоянии. Доступны: /admin_login, /admin_register, /admin_logout, /exit_admin.",
+    );
+  });
+
+  bot.onText(/^\/exit_admin(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(chatId, "ℹ️ Админский режим уже выключен.");
+      return;
+    }
+
+    exitAdminMode(telegramId);
+    await bot.sendMessage(
+      chatId,
+      "✅ Админский режим выключен. Возвращаем вас в курьерский режим...",
+    );
+
+    await restoreCourierFlowAfterExitAdmin(
+      bot,
+      chatId,
+      telegramId,
+      courierService,
+      registrationHandler,
+      sessionService,
+    );
+  });
+
+  bot.onText(/^\/admin_login(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "ℹ️ Сначала войдите в админский режим командой /admin.",
+      );
+      return;
+    }
+
+    await startAdminLoginFlow(chatId, telegramId);
+  });
+
+  bot.onText(/^\/admin_register(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "ℹ️ Сначала войдите в админский режим командой /admin.",
+      );
+      return;
+    }
+
+    await startAdminRegistrationFlow(chatId, telegramId);
+  });
+
+  bot.onText(/^\/superadmin_create_warehouse(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      return;
+    }
+
+    const currentState = stateManager.getUserState(telegramId);
+
+    if (!isInAuthenticatedOrSubflow(currentState)) {
+      await bot.sendMessage(
+        chatId,
+        "🔒 Эта команда доступна только авторизованному администратору. Используйте /admin_login.",
+      );
+      return;
+    }
+
+    const tempData = stateManager.getUserTempData<{
+      adminPermissionsLevel?: number;
+    }>(telegramId);
+    const permissionsLevel = tempData?.adminPermissionsLevel ?? 0;
+
+    if (permissionsLevel < 2) {
+      await bot.sendMessage(chatId, "🚫 Нет прав на эту команду.");
+      return;
+    }
+
+    stateManager.setUserState(
+      telegramId,
+      AdminState.CREATE_WAREHOUSE_AWAITING_NAME,
+    );
+    await bot.sendMessage(chatId, "Введите название склада");
+  });
+
+  bot.onText(/^\/superadmin_edit_warehouses(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      return;
+    }
+
+    const currentState = stateManager.getUserState(telegramId);
+    if (!isInAuthenticatedOrSubflow(currentState)) {
+      await bot.sendMessage(
+        chatId,
+        "🔒 Эта команда доступна только авторизованному администратору. Используйте /admin_login.",
+      );
+      return;
+    }
+
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    const permissionsLevel = tempData.adminPermissionsLevel ?? 0;
+
+    if (permissionsLevel < 2) {
+      await bot.sendMessage(chatId, "🚫 Нет прав на эту команду.");
+      return;
+    }
+
+    const warehouses = await warehouseService.getAllWarehouses();
+    if (!warehouses.length) {
+      await bot.sendMessage(chatId, "❌ Список складов пуст.");
+      return;
+    }
+
+    const listText = warehouses
+      .map(
+        (w, index) =>
+          `${index + 1}. <b>${escapeHtml(w.name)}</b> - <b>${escapeHtml(w.address || "-")}</b>`,
+      )
+      .join("\n");
+
+    stateManager.setUserState(telegramId, AdminState.EDIT_WAREHOUSES_SELECTING);
+    stateManager.setUserTempData(telegramId, {
+      editWarehouses: warehouses,
+      selectedWarehouseId: undefined,
+      editReturnState: currentState || AdminState.AUTHENTICATED,
+    });
+
+    await bot.sendMessage(
+      chatId,
+      `Введите номер склада, который хотите изменить:\n\n${listText}`,
+      { parse_mode: "HTML" },
+    );
+  });
+
+  bot.onText(/^\/superadmin_edit_warehouse_name(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.",
+      );
+      return;
+    }
+
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    if ((tempData.adminPermissionsLevel ?? 0) < 2) {
+      await bot.sendMessage(chatId, "🚫 Нет прав на эту команду.");
+      return;
+    }
+
+    const resolved = await tryResolveSelectedWarehouse(telegramId, chatId);
+    if (!resolved) {
+      return;
+    }
+
+    stateManager.setUserState(
+      telegramId,
+      AdminState.EDIT_WAREHOUSE_AWAITING_NAME,
+    );
+    await bot.sendMessage(chatId, "Введите новое название склада");
+  });
+
+  bot.onText(/^\/superadmin_edit_warehouse_address(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.",
+      );
+      return;
+    }
+
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    if ((tempData.adminPermissionsLevel ?? 0) < 2) {
+      await bot.sendMessage(chatId, "🚫 Нет прав на эту команду.");
+      return;
+    }
+
+    const resolved = await tryResolveSelectedWarehouse(telegramId, chatId);
+    if (!resolved) {
+      return;
+    }
+
+    stateManager.setUserState(
+      telegramId,
+      AdminState.EDIT_WAREHOUSE_AWAITING_ADDRESS,
+    );
+    await bot.sendMessage(chatId, "Введите новый адрес склада");
+  });
+
+  bot.onText(/^\/superadmin_edit_warehouse_status(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.",
+      );
+      return;
+    }
+
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    if ((tempData.adminPermissionsLevel ?? 0) < 2) {
+      await bot.sendMessage(chatId, "🚫 Нет прав на эту команду.");
+      return;
+    }
+
+    const resolved = await tryResolveSelectedWarehouse(telegramId, chatId);
+    if (!resolved) {
+      return;
+    }
+
+    stateManager.setUserState(
+      telegramId,
+      AdminState.EDIT_WAREHOUSE_AWAITING_STATUS,
+    );
+    await bot.sendMessage(
+      chatId,
+      `Текущий статус склада: ${getWarehouseStatusText(resolved.warehouse.is_active)}\n\nВыберите, какой статус должен быть у склада:\n1. Активный\n2. Отключен`,
+    );
+  });
+
+  bot.onText(/^\/superadmin_edit_warehouse_delete(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.",
+      );
+      return;
+    }
+
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    if ((tempData.adminPermissionsLevel ?? 0) < 2) {
+      await bot.sendMessage(chatId, "🚫 Нет прав на эту команду.");
+      return;
+    }
+
+    const resolved = await tryResolveSelectedWarehouse(telegramId, chatId);
+    if (!resolved) {
+      return;
+    }
+
+    stateManager.setUserState(
+      telegramId,
+      AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM,
+    );
+    await bot.sendMessage(
+      chatId,
+      "Вы уверены, что хотите удалить склад? Введите ДА",
+    );
+  });
+
+  bot.on("message", async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+    if (!telegramId) {
+      return;
+    }
+
+    const currentState = stateManager.getUserState(telegramId);
+    if (
+      currentState !== AdminState.REGISTER_AWAITING_LOGIN &&
+      currentState !== AdminState.REGISTER_AWAITING_PASSWORD &&
+      currentState !== AdminState.LOGIN_AWAITING_LOGIN &&
+      currentState !== AdminState.LOGIN_AWAITING_PASSWORD &&
+      currentState !== AdminState.CREATE_WAREHOUSE_AWAITING_NAME &&
+      currentState !== AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS &&
+      currentState !== AdminState.EDIT_WAREHOUSES_SELECTING &&
+      currentState !== AdminState.EDIT_WAREHOUSE_ACTION_SELECTING &&
+      currentState !== AdminState.EDIT_WAREHOUSE_AWAITING_NAME &&
+      currentState !== AdminState.EDIT_WAREHOUSE_AWAITING_ADDRESS &&
+      currentState !== AdminState.EDIT_WAREHOUSE_AWAITING_STATUS &&
+      currentState !== AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM
+    ) {
+      return;
+    }
+
+    const text = msg.text || "";
+    if (!text) {
+      return;
+    }
+
+    // Команды в ходе регистрации не перехватываем, их обрабатывают command-handlers.
+    if (isCommand(text)) {
+      return;
+    }
+
+    if (currentState === AdminState.REGISTER_AWAITING_LOGIN) {
+      const loginInput = text.trim();
+      const loginValidation = adminService.validateLogin(loginInput);
+      if (!loginValidation.isValid) {
         await bot.sendMessage(
-            chatId,
-            `Выбран склад:\n<b>${safeName}</b> - <b>${safeAddress}</b>\nСтатус: <b>${status}</b>\n\nДоступные действия:\n${commandsList}`,
-            { parse_mode: 'HTML' }
+          chatId,
+          `${loginValidation.error}\nПопробуйте снова.\n\nПридумайте и введите логин`,
         );
-    };
+        return;
+      }
 
-    const tryResolveSelectedWarehouse = async (
-        telegramId: number,
-        chatId: number
-    ): Promise<{ tempData: AdminSessionData; warehouse: Warehouse } | null> => {
-        const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
-        const selectedWarehouseId = tempData.selectedWarehouseId;
+      const isTaken = await adminService.isLoginTakenInsensitive(loginInput);
+      if (isTaken) {
+        await bot.sendMessage(
+          chatId,
+          "Логин уже занят (без учета регистра). Выберите другой.\n\nПридумайте и введите логин",
+        );
+        return;
+      }
 
-        if (!selectedWarehouseId) {
-            await bot.sendMessage(chatId, '❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.');
-            return null;
-        }
+      stateManager.setUserTempDataField(
+        telegramId,
+        "adminRegisterLogin",
+        loginInput,
+      );
+      stateManager.setUserState(
+        telegramId,
+        AdminState.REGISTER_AWAITING_PASSWORD,
+      );
+      await bot.sendMessage(
+        chatId,
+        "Придумайте и введите пароль. Требования - не менее 6 символов.",
+      );
+      return;
+    }
 
-        const warehouse = await warehouseService.getWarehouseById(selectedWarehouseId);
-        if (!warehouse) {
-            await bot.sendMessage(chatId, '❌ Выбранный склад не найден. Запустите /superadmin_edit_warehouses заново.');
-            return null;
-        }
+    if (currentState === AdminState.LOGIN_AWAITING_LOGIN) {
+      const loginInput = text.trim();
+      const loginValidation = adminService.validateLogin(loginInput);
+      if (!loginValidation.isValid) {
+        await bot.sendMessage(
+          chatId,
+          `${loginValidation.error}\nПопробуйте снова.\n\nВведите логин`,
+        );
+        return;
+      }
 
-        return { tempData, warehouse };
-    };
+      const adminCandidate = await adminService.getLoginCandidate(loginInput);
+      if (!adminCandidate) {
+        await bot.sendMessage(
+          chatId,
+          "Пользователь с таким логином не найден.\n\nВведите логин",
+        );
+        return;
+      }
 
-    const startAdminRegistrationFlow = async (chatId: number, telegramId: number) => {
-        stateManager.setUserState(telegramId, AdminState.REGISTER_AWAITING_LOGIN);
-        stateManager.resetUserTempData(telegramId);
+      stateManager.setUserTempData(telegramId, {
+        adminLoginId: adminCandidate.id,
+        adminLoginNickname: adminCandidate.nickname,
+        adminLoginPasswordHash: adminCandidate.passwordHash,
+        adminLoginPermissionsLevel: adminCandidate.permissionsLevel,
+        adminLoginIsActive: adminCandidate.isActive,
+      });
+      stateManager.setUserState(telegramId, AdminState.LOGIN_AWAITING_PASSWORD);
+      await bot.sendMessage(chatId, "Введите пароль");
+      return;
+    }
 
-        await bot.sendMessage(chatId, 'Придумайте и введите логин');
-    };
+    if (currentState === AdminState.LOGIN_AWAITING_PASSWORD) {
+      const tempData = stateManager.getUserTempData<{
+        adminLoginId?: number;
+        adminLoginNickname?: string;
+        adminLoginPasswordHash?: string;
+        adminLoginPermissionsLevel?: number;
+        adminLoginIsActive?: boolean;
+      }>(telegramId);
 
-    const startAdminLoginFlow = async (chatId: number, telegramId: number) => {
+      const adminLoginId = tempData?.adminLoginId;
+      const adminLoginPasswordHash = tempData?.adminLoginPasswordHash;
+      const adminLoginPermissionsLevel = tempData?.adminLoginPermissionsLevel;
+      const adminLoginIsActive = tempData?.adminLoginIsActive;
+
+      if (
+        !adminLoginId ||
+        !adminLoginPasswordHash ||
+        !adminLoginPermissionsLevel
+      ) {
+        await startAdminLoginFlow(chatId, telegramId);
+        return;
+      }
+
+      if (!adminLoginIsActive) {
+        await bot.sendMessage(
+          chatId,
+          "⏳ Ваш админ-аккаунт еще не активирован суперадминистратором.\n\nВведите логин",
+        );
         stateManager.setUserState(telegramId, AdminState.LOGIN_AWAITING_LOGIN);
         stateManager.resetUserTempData(telegramId);
+        return;
+      }
 
-        await bot.sendMessage(chatId, 'Введите логин');
-    };
+      const isPasswordValid = adminService.verifyPassword(
+        text,
+        adminLoginPasswordHash,
+      );
+      if (!isPasswordValid) {
+        await bot.sendMessage(chatId, "Неверный пароль\n\nВведите пароль");
+        return;
+      }
 
-    bot.onText(/^\/admin(?:@\w+)?$/, async (msg) => {
-        const chatId = msg.chat.id;
-        const telegramId = msg.from?.id;
+      await adminService.setLoginStatus(adminLoginId, true);
+      stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+      stateManager.setUserTempData(telegramId, {
+        adminId: adminLoginId,
+        adminPermissionsLevel: adminLoginPermissionsLevel,
+      });
 
-        if (!telegramId) {
-            return;
-        }
+      await bot.sendMessage(
+        chatId,
+        getAuthenticatedAdminWelcomeMessage(adminLoginPermissionsLevel),
+      );
 
-        const wasInAdminMode = isUserInAdminMode(telegramId);
-        enterAdminMode(telegramId);
+      return;
+    }
 
+    if (currentState === AdminState.CREATE_WAREHOUSE_AWAITING_NAME) {
+      const nameInput = text.trim();
+      if (nameInput.length < 2) {
         await bot.sendMessage(
-            chatId,
-            wasInAdminMode
-                ? '🛡 Вы уже в админском режиме. Доступны: /admin_login, /admin_register, /admin_logout, /exit_admin.'
-                : '🛡 Включен админский режим. Текущий курьерский сценарий остановлен. Доступны: /admin_login, /admin_register, /admin_logout, /exit_admin.',
-            { reply_markup: HIDE_REPLY_KEYBOARD }
+          chatId,
+          "❌ Название должно содержать минимум 2 символа.\n\nВведите название склада",
         );
-    });
+        return;
+      }
 
-    bot.onText(/^\/admin_logout(?:@\w+)?$/, async (msg) => {
-        const chatId = msg.chat.id;
-        const telegramId = msg.from?.id;
+      stateManager.setUserTempDataField(
+        telegramId,
+        "createWarehouseName",
+        nameInput,
+      );
+      stateManager.setUserState(
+        telegramId,
+        AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS,
+      );
+      await bot.sendMessage(chatId, "Введите адрес склада");
+      return;
+    }
 
-        if (!telegramId) {
-            return;
-        }
-
-        if (!isUserInAdminMode(telegramId)) {
-            await bot.sendMessage(chatId, 'ℹ️ Сначала войдите в админский режим командой /admin.');
-            return;
-        }
-
-        const currentState = stateManager.getUserState(telegramId);
-        const tempData = stateManager.getUserTempData<{ adminId?: number }>(telegramId);
-        const adminId = tempData?.adminId;
-        const wasAuthenticated = currentState === AdminState.AUTHENTICATED
-            || currentState === AdminState.CREATE_WAREHOUSE_AWAITING_NAME
-            || currentState === AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS
-            || currentState === AdminState.EDIT_WAREHOUSES_SELECTING
-            || currentState === AdminState.EDIT_WAREHOUSE_ACTION_SELECTING
-            || currentState === AdminState.EDIT_WAREHOUSE_AWAITING_NAME
-            || currentState === AdminState.EDIT_WAREHOUSE_AWAITING_ADDRESS
-            || currentState === AdminState.EDIT_WAREHOUSE_AWAITING_STATUS
-            || currentState === AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM;
-
-        if (wasAuthenticated && adminId) {
-            await adminService.setLoginStatus(adminId, false);
-        }
-
-        stateManager.setUserState(telegramId, AdminState.GUEST_MODE);
-        stateManager.resetUserTempData(telegramId);
-
+    if (currentState === AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS) {
+      const addressInput = text.trim();
+      if (addressInput.length < 2) {
         await bot.sendMessage(
-            chatId,
-            wasAuthenticated
-                ? '✅ Вы вышли из авторизованного админ-режима и возвращены в предадминское состояние. Доступны: /admin_login, /admin_register, /admin_logout, /exit_admin.'
-                : 'ℹ️ Вы уже находитесь в предадминском состоянии. Доступны: /admin_login, /admin_register, /admin_logout, /exit_admin.'
+          chatId,
+          "❌ Адрес должен содержать минимум 2 символа.\n\nВведите адрес склада",
         );
-    });
+        return;
+      }
 
-    bot.onText(/^\/exit_admin(?:@\w+)?$/, async (msg) => {
-        const chatId = msg.chat.id;
-        const telegramId = msg.from?.id;
+      const tempData = stateManager.getUserTempData<{
+        adminId?: number;
+        adminPermissionsLevel?: number;
+        createWarehouseName?: string;
+      }>(telegramId);
+      const warehouseName = tempData?.createWarehouseName;
+      const adminId = tempData?.adminId;
+      const adminPermissionsLevel = tempData?.adminPermissionsLevel;
 
-        if (!telegramId) {
-            return;
-        }
-
-        if (!isUserInAdminMode(telegramId)) {
-            await bot.sendMessage(chatId, 'ℹ️ Админский режим уже выключен.');
-            return;
-        }
-
-        exitAdminMode(telegramId);
-        await bot.sendMessage(chatId, '✅ Админский режим выключен. Возвращаем вас в курьерский режим...');
-
-        await restoreCourierFlowAfterExitAdmin(
-            bot,
-            chatId,
-            telegramId,
-            courierService,
-            registrationHandler,
-            sessionService
+      if (!warehouseName) {
+        stateManager.setUserState(
+          telegramId,
+          AdminState.CREATE_WAREHOUSE_AWAITING_NAME,
         );
-    });
+        await bot.sendMessage(
+          chatId,
+          "⚠️ Что-то пошло не так. Введите название склада",
+        );
+        return;
+      }
 
-    bot.onText(/^\/admin_login(?:@\w+)?$/, async (msg) => {
-        const chatId = msg.chat.id;
-        const telegramId = msg.from?.id;
+      const warehouse = await warehouseService.createWarehouse(
+        warehouseName,
+        addressInput,
+      );
 
-        if (!telegramId) {
-            return;
-        }
-
-        if (!isUserInAdminMode(telegramId)) {
-            await bot.sendMessage(chatId, 'ℹ️ Сначала войдите в админский режим командой /admin.');
-            return;
-        }
-
-        await startAdminLoginFlow(chatId, telegramId);
-    });
-
-    bot.onText(/^\/admin_register(?:@\w+)?$/, async (msg) => {
-        const chatId = msg.chat.id;
-        const telegramId = msg.from?.id;
-
-        if (!telegramId) {
-            return;
-        }
-
-        if (!isUserInAdminMode(telegramId)) {
-            await bot.sendMessage(chatId, 'ℹ️ Сначала войдите в админский режим командой /admin.');
-            return;
-        }
-
-        await startAdminRegistrationFlow(chatId, telegramId);
-    });
-
-    bot.onText(/^\/superadmin_create_warehouse(?:@\w+)?$/, async (msg) => {
-        const chatId = msg.chat.id;
-        const telegramId = msg.from?.id;
-
-        if (!telegramId) {
-            return;
-        }
-
-        if (!isUserInAdminMode(telegramId)) {
-            return;
-        }
-
-        const currentState = stateManager.getUserState(telegramId);
-
-        if (!isInAuthenticatedOrSubflow(currentState)) {
-            await bot.sendMessage(
-                chatId,
-                '🔒 Эта команда доступна только авторизованному администратору. Используйте /admin_login.'
-            );
-            return;
-        }
-
-        const tempData = stateManager.getUserTempData<{ adminPermissionsLevel?: number }>(telegramId);
-        const permissionsLevel = tempData?.adminPermissionsLevel ?? 0;
-
-        if (permissionsLevel < 2) {
-            await bot.sendMessage(chatId, '🚫 Нет прав на эту команду.');
-            return;
-        }
-
-        stateManager.setUserState(telegramId, AdminState.CREATE_WAREHOUSE_AWAITING_NAME);
-        await bot.sendMessage(chatId, 'Введите название склада');
-    });
-
-    bot.onText(/^\/superadmin_edit_warehouses(?:@\w+)?$/, async (msg) => {
-        const chatId = msg.chat.id;
-        const telegramId = msg.from?.id;
-
-        if (!telegramId) {
-            return;
-        }
-
-        if (!isUserInAdminMode(telegramId)) {
-            return;
-        }
-
-        const currentState = stateManager.getUserState(telegramId);
-        if (!isInAuthenticatedOrSubflow(currentState)) {
-            await bot.sendMessage(
-                chatId,
-                '🔒 Эта команда доступна только авторизованному администратору. Используйте /admin_login.'
-            );
-            return;
-        }
-
-        const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
-        const permissionsLevel = tempData.adminPermissionsLevel ?? 0;
-
-        if (permissionsLevel < 2) {
-            await bot.sendMessage(chatId, '🚫 Нет прав на эту команду.');
-            return;
-        }
-
-        const warehouses = await warehouseService.getAllWarehouses();
-        if (!warehouses.length) {
-            await bot.sendMessage(chatId, '❌ Список складов пуст.');
-            return;
-        }
-
-        const listText = warehouses
-            .map((w, index) => `${index + 1}. <b>${escapeHtml(w.name)}</b> - <b>${escapeHtml(w.address || '-')}</b>`)
-            .join('\n');
-
-        stateManager.setUserState(telegramId, AdminState.EDIT_WAREHOUSES_SELECTING);
+      stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+      stateManager.resetUserTempData(telegramId);
+      if (adminId && adminPermissionsLevel) {
         stateManager.setUserTempData(telegramId, {
-            editWarehouses: warehouses,
-            selectedWarehouseId: undefined,
-            editReturnState: currentState || AdminState.AUTHENTICATED
+          adminId,
+          adminPermissionsLevel,
         });
+      }
 
+      await bot.sendMessage(
+        chatId,
+        `✅ Успешно создан склад *${warehouse.name}* по адресу *${warehouse.address}*`,
+        { parse_mode: "Markdown" },
+      );
+      return;
+    }
+
+    if (currentState === AdminState.EDIT_WAREHOUSES_SELECTING) {
+      const tempData =
+        stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const warehouses = tempData.editWarehouses;
+
+      if (!warehouses?.length) {
+        restoreToAuthenticatedWithAdminContext(telegramId, tempData);
         await bot.sendMessage(
-            chatId,
-            `Введите номер склада, который хотите изменить:\n\n${listText}`,
-            { parse_mode: 'HTML' }
+          chatId,
+          "❌ Что-то пошло не так. Запустите /superadmin_edit_warehouses заново.",
         );
-    });
+        return;
+      }
 
-    bot.onText(/^\/superadmin_edit_warehouse_name(?:@\w+)?$/, async (msg) => {
-        const chatId = msg.chat.id;
-        const telegramId = msg.from?.id;
-
-        if (!telegramId) {
-            return;
-        }
-
-        if (!isUserInAdminMode(telegramId)) {
-            await bot.sendMessage(chatId, '❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.');
-            return;
-        }
-
-        const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
-        if ((tempData.adminPermissionsLevel ?? 0) < 2) {
-            await bot.sendMessage(chatId, '🚫 Нет прав на эту команду.');
-            return;
-        }
-
-        const resolved = await tryResolveSelectedWarehouse(telegramId, chatId);
-        if (!resolved) {
-            return;
-        }
-
-        stateManager.setUserState(telegramId, AdminState.EDIT_WAREHOUSE_AWAITING_NAME);
-        await bot.sendMessage(chatId, 'Введите новое название склада');
-    });
-
-    bot.onText(/^\/superadmin_edit_warehouse_address(?:@\w+)?$/, async (msg) => {
-        const chatId = msg.chat.id;
-        const telegramId = msg.from?.id;
-
-        if (!telegramId) {
-            return;
-        }
-
-        if (!isUserInAdminMode(telegramId)) {
-            await bot.sendMessage(chatId, '❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.');
-            return;
-        }
-
-        const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
-        if ((tempData.adminPermissionsLevel ?? 0) < 2) {
-            await bot.sendMessage(chatId, '🚫 Нет прав на эту команду.');
-            return;
-        }
-
-        const resolved = await tryResolveSelectedWarehouse(telegramId, chatId);
-        if (!resolved) {
-            return;
-        }
-
-        stateManager.setUserState(telegramId, AdminState.EDIT_WAREHOUSE_AWAITING_ADDRESS);
-        await bot.sendMessage(chatId, 'Введите новый адрес склада');
-    });
-
-    bot.onText(/^\/superadmin_edit_warehouse_status(?:@\w+)?$/, async (msg) => {
-        const chatId = msg.chat.id;
-        const telegramId = msg.from?.id;
-
-        if (!telegramId) {
-            return;
-        }
-
-        if (!isUserInAdminMode(telegramId)) {
-            await bot.sendMessage(chatId, '❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.');
-            return;
-        }
-
-        const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
-        if ((tempData.adminPermissionsLevel ?? 0) < 2) {
-            await bot.sendMessage(chatId, '🚫 Нет прав на эту команду.');
-            return;
-        }
-
-        const resolved = await tryResolveSelectedWarehouse(telegramId, chatId);
-        if (!resolved) {
-            return;
-        }
-
-        stateManager.setUserState(telegramId, AdminState.EDIT_WAREHOUSE_AWAITING_STATUS);
+      if (!/^\d+$/.test(text.trim())) {
         await bot.sendMessage(
-            chatId,
-            `Текущий статус склада: ${getWarehouseStatusText(resolved.warehouse.is_active)}\n\nВыберите, какой статус должен быть у склада:\n1. Активный\n2. Отключен`
+          chatId,
+          "❌ Введите корректный номер склада из списка.",
         );
-    });
+        return;
+      }
 
-    bot.onText(/^\/superadmin_edit_warehouse_delete(?:@\w+)?$/, async (msg) => {
-        const chatId = msg.chat.id;
-        const telegramId = msg.from?.id;
+      const index = parseInt(text.trim(), 10) - 1;
+      if (index < 0 || index >= warehouses.length) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Склад с таким номером не найден. Введите номер из списка.",
+        );
+        return;
+      }
 
-        if (!telegramId) {
-            return;
+      const selectedWarehouse = warehouses[index];
+      stateManager.setUserState(
+        telegramId,
+        AdminState.EDIT_WAREHOUSE_ACTION_SELECTING,
+      );
+      stateManager.setUserTempData(telegramId, {
+        selectedWarehouseId: selectedWarehouse.id,
+      });
+
+      await sendWarehouseActionsMessage(chatId, selectedWarehouse);
+      return;
+    }
+
+    if (currentState === AdminState.EDIT_WAREHOUSE_AWAITING_NAME) {
+      const nameInput = text.trim();
+      if (nameInput.length < 2) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Название должно содержать минимум 2 символа.\n\nВведите новое название склада",
+        );
+        return;
+      }
+
+      const tempData =
+        stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const selectedWarehouseId = tempData.selectedWarehouseId;
+      if (!selectedWarehouseId) {
+        const fallbackState =
+          tempData.editReturnState || AdminState.AUTHENTICATED;
+        stateManager.setUserState(telegramId, fallbackState);
+        await bot.sendMessage(
+          chatId,
+          "❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.",
+        );
+        return;
+      }
+
+      const updated = await warehouseService.updateWarehouseName(
+        selectedWarehouseId,
+        nameInput,
+      );
+      if (!updated) {
+        const fallbackState =
+          tempData.editReturnState || AdminState.AUTHENTICATED;
+        stateManager.setUserState(telegramId, fallbackState);
+        await bot.sendMessage(
+          chatId,
+          "❌ Склад не найден. Запустите /superadmin_edit_warehouses заново.",
+        );
+        return;
+      }
+
+      stateManager.setUserState(
+        telegramId,
+        AdminState.EDIT_WAREHOUSE_ACTION_SELECTING,
+      );
+      await bot.sendMessage(
+        chatId,
+        `✅ Название склада изменено на <b>${escapeHtml(updated.name)}</b>`,
+        {
+          parse_mode: "HTML",
+        },
+      );
+      await sendWarehouseActionsMessage(chatId, updated);
+      return;
+    }
+
+    if (currentState === AdminState.EDIT_WAREHOUSE_AWAITING_ADDRESS) {
+      const addressInput = text.trim();
+      if (addressInput.length < 2) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Адрес должен содержать минимум 2 символа.\n\nВведите новый адрес склада",
+        );
+        return;
+      }
+
+      const tempData =
+        stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const selectedWarehouseId = tempData.selectedWarehouseId;
+      if (!selectedWarehouseId) {
+        const fallbackState =
+          tempData.editReturnState || AdminState.AUTHENTICATED;
+        stateManager.setUserState(telegramId, fallbackState);
+        await bot.sendMessage(
+          chatId,
+          "❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.",
+        );
+        return;
+      }
+
+      const updated = await warehouseService.updateWarehouseAddress(
+        selectedWarehouseId,
+        addressInput,
+      );
+      if (!updated) {
+        const fallbackState =
+          tempData.editReturnState || AdminState.AUTHENTICATED;
+        stateManager.setUserState(telegramId, fallbackState);
+        await bot.sendMessage(
+          chatId,
+          "❌ Склад не найден. Запустите /superadmin_edit_warehouses заново.",
+        );
+        return;
+      }
+
+      stateManager.setUserState(
+        telegramId,
+        AdminState.EDIT_WAREHOUSE_ACTION_SELECTING,
+      );
+      await bot.sendMessage(
+        chatId,
+        `✅ Адрес склада изменен на <b>${escapeHtml(updated.address || "-")}</b>`,
+        {
+          parse_mode: "HTML",
+        },
+      );
+      await sendWarehouseActionsMessage(chatId, updated);
+      return;
+    }
+
+    if (currentState === AdminState.EDIT_WAREHOUSE_AWAITING_STATUS) {
+      const status = parseWarehouseStatusInput(text);
+      if (status === null) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Некорректный выбор статуса. Введите 1 (Активный) или 2 (Отключен).",
+        );
+        return;
+      }
+
+      const tempData =
+        stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const selectedWarehouseId = tempData.selectedWarehouseId;
+      if (!selectedWarehouseId) {
+        const fallbackState =
+          tempData.editReturnState || AdminState.AUTHENTICATED;
+        stateManager.setUserState(telegramId, fallbackState);
+        await bot.sendMessage(
+          chatId,
+          "❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.",
+        );
+        return;
+      }
+
+      if (!status) {
+        const hasActiveSessions =
+          await warehouseService.hasActiveSessionsByWarehouseId(
+            selectedWarehouseId,
+          );
+        if (hasActiveSessions) {
+          await bot.sendMessage(
+            chatId,
+            "❌ Нельзя отключить склад: по нему есть активные сессии. Завершите сессии и повторите попытку.",
+          );
+          return;
         }
+      }
 
-        if (!isUserInAdminMode(telegramId)) {
-            await bot.sendMessage(chatId, '❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.');
-            return;
-        }
+      const updated = await warehouseService.updateWarehouseStatus(
+        selectedWarehouseId,
+        status,
+      );
+      if (!updated) {
+        const fallbackState =
+          tempData.editReturnState || AdminState.AUTHENTICATED;
+        stateManager.setUserState(telegramId, fallbackState);
+        await bot.sendMessage(
+          chatId,
+          "❌ Склад не найден. Запустите /superadmin_edit_warehouses заново.",
+        );
+        return;
+      }
 
-        const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
-        if ((tempData.adminPermissionsLevel ?? 0) < 2) {
-            await bot.sendMessage(chatId, '🚫 Нет прав на эту команду.');
-            return;
-        }
+      stateManager.setUserState(
+        telegramId,
+        AdminState.EDIT_WAREHOUSE_ACTION_SELECTING,
+      );
+      await bot.sendMessage(
+        chatId,
+        `✅ Статус склада изменен на <b>${getWarehouseStatusText(updated.is_active)}</b>`,
+        {
+          parse_mode: "HTML",
+        },
+      );
+      await sendWarehouseActionsMessage(chatId, updated);
+      return;
+    }
 
-        const resolved = await tryResolveSelectedWarehouse(telegramId, chatId);
-        if (!resolved) {
-            return;
-        }
+    if (currentState === AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM) {
+      const tempData =
+        stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const selectedWarehouseId = tempData.selectedWarehouseId;
+      const fallbackState =
+        tempData.editReturnState || AdminState.AUTHENTICATED;
 
-        stateManager.setUserState(telegramId, AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM);
-        await bot.sendMessage(chatId, 'Вы уверены, что хотите удалить склад? Введите ДА');
-    });
+      if (text.trim() !== "ДА") {
+        await bot.sendMessage(
+          chatId,
+          "❌ Для удаления склада введите строго ДА.",
+        );
+        return;
+      }
 
-    bot.on('message', async (msg) => {
-        const chatId = msg.chat.id;
-        const telegramId = msg.from?.id;
-        if (!telegramId) {
-            return;
-        }
+      if (!selectedWarehouseId) {
+        stateManager.setUserState(telegramId, fallbackState);
+        await bot.sendMessage(
+          chatId,
+          "❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.",
+        );
+        return;
+      }
 
-        const currentState = stateManager.getUserState(telegramId);
-        if (
-            currentState !== AdminState.REGISTER_AWAITING_LOGIN &&
-            currentState !== AdminState.REGISTER_AWAITING_PASSWORD &&
-            currentState !== AdminState.LOGIN_AWAITING_LOGIN &&
-            currentState !== AdminState.LOGIN_AWAITING_PASSWORD &&
-            currentState !== AdminState.CREATE_WAREHOUSE_AWAITING_NAME &&
-            currentState !== AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS &&
-            currentState !== AdminState.EDIT_WAREHOUSES_SELECTING &&
-            currentState !== AdminState.EDIT_WAREHOUSE_ACTION_SELECTING &&
-            currentState !== AdminState.EDIT_WAREHOUSE_AWAITING_NAME &&
-            currentState !== AdminState.EDIT_WAREHOUSE_AWAITING_ADDRESS &&
-            currentState !== AdminState.EDIT_WAREHOUSE_AWAITING_STATUS &&
-            currentState !== AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM
-        ) {
-            return;
-        }
+      const deleteResult =
+        await warehouseService.deleteWarehouse(selectedWarehouseId);
+      if (!deleteResult.success) {
+        await bot.sendMessage(
+          chatId,
+          `❌ ${deleteResult.reason || "Не удалось удалить склад."}`,
+        );
+        return;
+      }
 
-        const text = msg.text || '';
-        if (!text) {
-            return;
-        }
+      stateManager.setUserState(telegramId, fallbackState);
+      stateManager.resetUserTempData(telegramId);
+      if (tempData.adminId && tempData.adminPermissionsLevel) {
+        stateManager.setUserTempData(telegramId, {
+          adminId: tempData.adminId,
+          adminPermissionsLevel: tempData.adminPermissionsLevel,
+        });
+      }
 
-        // Команды в ходе регистрации не перехватываем, их обрабатывают command-handlers.
-        if (isCommand(text)) {
-            return;
-        }
+      await bot.sendMessage(chatId, "✅ Склад успешно удален.");
+      return;
+    }
 
-        if (currentState === AdminState.REGISTER_AWAITING_LOGIN) {
-            const loginInput = text.trim();
-            const loginValidation = adminService.validateLogin(loginInput);
-            if (!loginValidation.isValid) {
-                await bot.sendMessage(
-                    chatId,
-                    `${loginValidation.error}\nПопробуйте снова.\n\nПридумайте и введите логин`
-                );
-                return;
-            }
+    const passwordValidation = adminService.validatePassword(text);
+    if (!passwordValidation.isValid) {
+      await bot.sendMessage(
+        chatId,
+        "Пароль не соответствует требованиям.\nПридумайте и введите пароль. Требования - не менее 6 символов.",
+      );
+      return;
+    }
 
-            const isTaken = await adminService.isLoginTakenInsensitive(loginInput);
-            if (isTaken) {
-                await bot.sendMessage(
-                    chatId,
-                    'Логин уже занят (без учета регистра). Выберите другой.\n\nПридумайте и введите логин'
-                );
-                return;
-            }
+    const tempData = stateManager.getUserTempData<{
+      adminRegisterLogin?: string;
+    }>(telegramId);
+    const adminRegisterLogin = tempData?.adminRegisterLogin;
 
-            stateManager.setUserTempDataField(telegramId, 'adminRegisterLogin', loginInput);
-            stateManager.setUserState(telegramId, AdminState.REGISTER_AWAITING_PASSWORD);
-            await bot.sendMessage(chatId, 'Придумайте и введите пароль. Требования - не менее 6 символов.');
-            return;
-        }
+    if (!adminRegisterLogin) {
+      await startAdminRegistrationFlow(chatId, telegramId);
+      return;
+    }
 
-        if (currentState === AdminState.LOGIN_AWAITING_LOGIN) {
-            const loginInput = text.trim();
-            const loginValidation = adminService.validateLogin(loginInput);
-            if (!loginValidation.isValid) {
-                await bot.sendMessage(chatId, `${loginValidation.error}\nПопробуйте снова.\n\nВведите логин`);
-                return;
-            }
-
-            const adminCandidate = await adminService.getLoginCandidate(loginInput);
-            if (!adminCandidate) {
-                await bot.sendMessage(
-                    chatId,
-                    'Пользователь с таким логином не найден.\n\nВведите логин'
-                );
-                return;
-            }
-
-            stateManager.setUserTempData(telegramId, {
-                adminLoginId: adminCandidate.id,
-                adminLoginNickname: adminCandidate.nickname,
-                adminLoginPasswordHash: adminCandidate.passwordHash,
-                adminLoginPermissionsLevel: adminCandidate.permissionsLevel,
-                adminLoginIsActive: adminCandidate.isActive
-            });
-            stateManager.setUserState(telegramId, AdminState.LOGIN_AWAITING_PASSWORD);
-            await bot.sendMessage(chatId, 'Введите пароль');
-            return;
-        }
-
-        if (currentState === AdminState.LOGIN_AWAITING_PASSWORD) {
-            const tempData = stateManager.getUserTempData<{
-                adminLoginId?: number;
-                adminLoginNickname?: string;
-                adminLoginPasswordHash?: string;
-                adminLoginPermissionsLevel?: number;
-                adminLoginIsActive?: boolean;
-            }>(telegramId);
-
-            const adminLoginId = tempData?.adminLoginId;
-            const adminLoginPasswordHash = tempData?.adminLoginPasswordHash;
-            const adminLoginPermissionsLevel = tempData?.adminLoginPermissionsLevel;
-            const adminLoginIsActive = tempData?.adminLoginIsActive;
-
-            if (!adminLoginId || !adminLoginPasswordHash || !adminLoginPermissionsLevel) {
-                await startAdminLoginFlow(chatId, telegramId);
-                return;
-            }
-
-            if (!adminLoginIsActive) {
-                await bot.sendMessage(
-                    chatId,
-                    '⏳ Ваш админ-аккаунт еще не активирован суперадминистратором.\n\nВведите логин'
-                );
-                stateManager.setUserState(telegramId, AdminState.LOGIN_AWAITING_LOGIN);
-                stateManager.resetUserTempData(telegramId);
-                return;
-            }
-
-            const isPasswordValid = adminService.verifyPassword(text, adminLoginPasswordHash);
-            if (!isPasswordValid) {
-                await bot.sendMessage(chatId, 'Неверный пароль\n\nВведите пароль');
-                return;
-            }
-
-            await adminService.setLoginStatus(adminLoginId, true);
-            stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
-            stateManager.setUserTempData(telegramId, {
-                adminId: adminLoginId,
-                adminPermissionsLevel: adminLoginPermissionsLevel
-            });
-
-            await bot.sendMessage(
-                chatId,
-                adminLoginPermissionsLevel >= 2
-                    ? '✅ Вы успешно вошли как суперадмин.'
-                    : '✅ Вы успешно вошли как админ.'
-            );
-
-            return;
-        }
-
-        if (currentState === AdminState.CREATE_WAREHOUSE_AWAITING_NAME) {
-            const nameInput = text.trim();
-            if (nameInput.length < 2) {
-                await bot.sendMessage(chatId, '❌ Название должно содержать минимум 2 символа.\n\nВведите название склада');
-                return;
-            }
-
-            stateManager.setUserTempDataField(telegramId, 'createWarehouseName', nameInput);
-            stateManager.setUserState(telegramId, AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS);
-            await bot.sendMessage(chatId, 'Введите адрес склада');
-            return;
-        }
-
-        if (currentState === AdminState.CREATE_WAREHOUSE_AWAITING_ADDRESS) {
-            const addressInput = text.trim();
-            if (addressInput.length < 2) {
-                await bot.sendMessage(chatId, '❌ Адрес должен содержать минимум 2 символа.\n\nВведите адрес склада');
-                return;
-            }
-
-            const tempData = stateManager.getUserTempData<{
-                adminId?: number;
-                adminPermissionsLevel?: number;
-                createWarehouseName?: string;
-            }>(telegramId);
-            const warehouseName = tempData?.createWarehouseName;
-            const adminId = tempData?.adminId;
-            const adminPermissionsLevel = tempData?.adminPermissionsLevel;
-
-            if (!warehouseName) {
-                stateManager.setUserState(telegramId, AdminState.CREATE_WAREHOUSE_AWAITING_NAME);
-                await bot.sendMessage(chatId, '⚠️ Что-то пошло не так. Введите название склада');
-                return;
-            }
-
-            const warehouse = await warehouseService.createWarehouse(warehouseName, addressInput);
-
-            stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
-            stateManager.resetUserTempData(telegramId);
-            if (adminId && adminPermissionsLevel) {
-                stateManager.setUserTempData(telegramId, { adminId, adminPermissionsLevel });
-            }
-
-            await bot.sendMessage(
-                chatId,
-                `✅ Успешно создан склад *${warehouse.name}* по адресу *${warehouse.address}*`,
-                { parse_mode: 'Markdown' }
-            );
-            return;
-        }
-
-        if (currentState === AdminState.EDIT_WAREHOUSES_SELECTING) {
-            const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
-            const warehouses = tempData.editWarehouses;
-
-            if (!warehouses?.length) {
-                restoreToAuthenticatedWithAdminContext(telegramId, tempData);
-                await bot.sendMessage(chatId, '❌ Что-то пошло не так. Запустите /superadmin_edit_warehouses заново.');
-                return;
-            }
-
-            if (!/^\d+$/.test(text.trim())) {
-                await bot.sendMessage(chatId, '❌ Введите корректный номер склада из списка.');
-                return;
-            }
-
-            const index = parseInt(text.trim(), 10) - 1;
-            if (index < 0 || index >= warehouses.length) {
-                await bot.sendMessage(chatId, '❌ Склад с таким номером не найден. Введите номер из списка.');
-                return;
-            }
-
-            const selectedWarehouse = warehouses[index];
-            stateManager.setUserState(telegramId, AdminState.EDIT_WAREHOUSE_ACTION_SELECTING);
-            stateManager.setUserTempData(telegramId, { selectedWarehouseId: selectedWarehouse.id });
-
-            await sendWarehouseActionsMessage(chatId, selectedWarehouse);
-            return;
-        }
-
-        if (currentState === AdminState.EDIT_WAREHOUSE_AWAITING_NAME) {
-            const nameInput = text.trim();
-            if (nameInput.length < 2) {
-                await bot.sendMessage(chatId, '❌ Название должно содержать минимум 2 символа.\n\nВведите новое название склада');
-                return;
-            }
-
-            const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
-            const selectedWarehouseId = tempData.selectedWarehouseId;
-            if (!selectedWarehouseId) {
-                const fallbackState = tempData.editReturnState || AdminState.AUTHENTICATED;
-                stateManager.setUserState(telegramId, fallbackState);
-                await bot.sendMessage(chatId, '❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.');
-                return;
-            }
-
-            const updated = await warehouseService.updateWarehouseName(selectedWarehouseId, nameInput);
-            if (!updated) {
-                const fallbackState = tempData.editReturnState || AdminState.AUTHENTICATED;
-                stateManager.setUserState(telegramId, fallbackState);
-                await bot.sendMessage(chatId, '❌ Склад не найден. Запустите /superadmin_edit_warehouses заново.');
-                return;
-            }
-
-            stateManager.setUserState(telegramId, AdminState.EDIT_WAREHOUSE_ACTION_SELECTING);
-            await bot.sendMessage(chatId, `✅ Название склада изменено на <b>${escapeHtml(updated.name)}</b>`, {
-                parse_mode: 'HTML'
-            });
-            await sendWarehouseActionsMessage(chatId, updated);
-            return;
-        }
-
-        if (currentState === AdminState.EDIT_WAREHOUSE_AWAITING_ADDRESS) {
-            const addressInput = text.trim();
-            if (addressInput.length < 2) {
-                await bot.sendMessage(chatId, '❌ Адрес должен содержать минимум 2 символа.\n\nВведите новый адрес склада');
-                return;
-            }
-
-            const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
-            const selectedWarehouseId = tempData.selectedWarehouseId;
-            if (!selectedWarehouseId) {
-                const fallbackState = tempData.editReturnState || AdminState.AUTHENTICATED;
-                stateManager.setUserState(telegramId, fallbackState);
-                await bot.sendMessage(chatId, '❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.');
-                return;
-            }
-
-            const updated = await warehouseService.updateWarehouseAddress(selectedWarehouseId, addressInput);
-            if (!updated) {
-                const fallbackState = tempData.editReturnState || AdminState.AUTHENTICATED;
-                stateManager.setUserState(telegramId, fallbackState);
-                await bot.sendMessage(chatId, '❌ Склад не найден. Запустите /superadmin_edit_warehouses заново.');
-                return;
-            }
-
-            stateManager.setUserState(telegramId, AdminState.EDIT_WAREHOUSE_ACTION_SELECTING);
-            await bot.sendMessage(chatId, `✅ Адрес склада изменен на <b>${escapeHtml(updated.address || '-')}</b>`, {
-                parse_mode: 'HTML'
-            });
-            await sendWarehouseActionsMessage(chatId, updated);
-            return;
-        }
-
-        if (currentState === AdminState.EDIT_WAREHOUSE_AWAITING_STATUS) {
-            const status = parseWarehouseStatusInput(text);
-            if (status === null) {
-                await bot.sendMessage(
-                    chatId,
-                    '❌ Некорректный выбор статуса. Введите 1 (Активный) или 2 (Отключен).'
-                );
-                return;
-            }
-
-            const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
-            const selectedWarehouseId = tempData.selectedWarehouseId;
-            if (!selectedWarehouseId) {
-                const fallbackState = tempData.editReturnState || AdminState.AUTHENTICATED;
-                stateManager.setUserState(telegramId, fallbackState);
-                await bot.sendMessage(chatId, '❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.');
-                return;
-            }
-
-            if (!status) {
-                const hasActiveSessions = await warehouseService.hasActiveSessionsByWarehouseId(selectedWarehouseId);
-                if (hasActiveSessions) {
-                    await bot.sendMessage(
-                        chatId,
-                        '❌ Нельзя отключить склад: по нему есть активные сессии. Завершите сессии и повторите попытку.'
-                    );
-                    return;
-                }
-            }
-
-            const updated = await warehouseService.updateWarehouseStatus(selectedWarehouseId, status);
-            if (!updated) {
-                const fallbackState = tempData.editReturnState || AdminState.AUTHENTICATED;
-                stateManager.setUserState(telegramId, fallbackState);
-                await bot.sendMessage(chatId, '❌ Склад не найден. Запустите /superadmin_edit_warehouses заново.');
-                return;
-            }
-
-            stateManager.setUserState(telegramId, AdminState.EDIT_WAREHOUSE_ACTION_SELECTING);
-            await bot.sendMessage(chatId, `✅ Статус склада изменен на <b>${getWarehouseStatusText(updated.is_active)}</b>`, {
-                parse_mode: 'HTML'
-            });
-            await sendWarehouseActionsMessage(chatId, updated);
-            return;
-        }
-
-        if (currentState === AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM) {
-            const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
-            const selectedWarehouseId = tempData.selectedWarehouseId;
-            const fallbackState = tempData.editReturnState || AdminState.AUTHENTICATED;
-
-            if (text.trim() !== 'ДА') {
-                await bot.sendMessage(chatId, '❌ Для удаления склада введите строго ДА.');
-                return;
-            }
-
-            if (!selectedWarehouseId) {
-                stateManager.setUserState(telegramId, fallbackState);
-                await bot.sendMessage(chatId, '❌ Команда недоступна без выбора склада через /superadmin_edit_warehouses.');
-                return;
-            }
-
-            const deleteResult = await warehouseService.deleteWarehouse(selectedWarehouseId);
-            if (!deleteResult.success) {
-                await bot.sendMessage(chatId, `❌ ${deleteResult.reason || 'Не удалось удалить склад.'}`);
-                return;
-            }
-
-            stateManager.setUserState(telegramId, fallbackState);
-            stateManager.resetUserTempData(telegramId);
-            if (tempData.adminId && tempData.adminPermissionsLevel) {
-                stateManager.setUserTempData(telegramId, {
-                    adminId: tempData.adminId,
-                    adminPermissionsLevel: tempData.adminPermissionsLevel
-                });
-            }
-
-            await bot.sendMessage(chatId, '✅ Склад успешно удален.');
-            return;
-        }
-
-        const passwordValidation = adminService.validatePassword(text);
-        if (!passwordValidation.isValid) {
-            await bot.sendMessage(
-                chatId,
-                'Пароль не соответствует требованиям.\nПридумайте и введите пароль. Требования - не менее 6 символов.'
-            );
-            return;
-        }
-
-        const tempData = stateManager.getUserTempData<{ adminRegisterLogin?: string }>(telegramId);
-        const adminRegisterLogin = tempData?.adminRegisterLogin;
-
-        if (!adminRegisterLogin) {
-            await startAdminRegistrationFlow(chatId, telegramId);
-            return;
-        }
-
-        const registrationResult = await adminService.registerPendingAdmin(adminRegisterLogin, text);
-        if (!registrationResult.success) {
-            if (registrationResult.duplicateInsensitive) {
-                await bot.sendMessage(
-                    chatId,
-                    'Логин уже занят (без учета регистра). Выберите другой.\n\nПридумайте и введите логин'
-                );
-                stateManager.setUserState(telegramId, AdminState.REGISTER_AWAITING_LOGIN);
-                stateManager.resetUserTempData(telegramId);
-                return;
-            }
-
-            await bot.sendMessage(chatId, '❌ Не удалось зарегистрировать администратора. Попробуйте позже.');
-            return;
-        }
-
-        stateManager.setUserState(telegramId, AdminState.GUEST_MODE);
+    const registrationResult = await adminService.registerPendingAdmin(
+      adminRegisterLogin,
+      text,
+    );
+    if (!registrationResult.success) {
+      if (registrationResult.duplicateInsensitive) {
+        await bot.sendMessage(
+          chatId,
+          "Логин уже занят (без учета регистра). Выберите другой.\n\nПридумайте и введите логин",
+        );
+        stateManager.setUserState(
+          telegramId,
+          AdminState.REGISTER_AWAITING_LOGIN,
+        );
         stateManager.resetUserTempData(telegramId);
+        return;
+      }
 
-        await bot.sendMessage(
-            chatId,
-            '✅ Заявка администратора создана. Ожидайте одобрения суперадминистратором.\n\n🛡 Вы по-прежнему в админском режиме. Доступны: /admin_login, /admin_register, /admin_logout, /exit_admin.'
-        );
-    });
+      await bot.sendMessage(
+        chatId,
+        "❌ Не удалось зарегистрировать администратора. Попробуйте позже.",
+      );
+      return;
+    }
+
+    stateManager.setUserState(telegramId, AdminState.GUEST_MODE);
+    stateManager.resetUserTempData(telegramId);
+
+    await bot.sendMessage(
+      chatId,
+      "✅ Заявка администратора создана. Ожидайте одобрения суперадминистратором.\n\n🛡 Вы по-прежнему в админском режиме. Доступны: /admin_login, /admin_register, /admin_logout, /exit_admin.",
+    );
+  });
 }
