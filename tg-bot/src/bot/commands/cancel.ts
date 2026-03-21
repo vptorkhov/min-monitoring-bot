@@ -2,6 +2,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import { RegistrationHandler } from '../handlers/registration.handler';
 import { CourierService } from '../../services/courier.service';
 import { SessionService } from '../../services/session.service';
+import { AdminService } from '../../services/admin.service';
 import {
     stateManager
 } from '../state-manager';
@@ -24,6 +25,14 @@ export function registerCancelCommand(
     courierService: CourierService,
     sessionService: SessionService
 ) {
+    const adminService = new AdminService();
+
+    const formatEditableAdminsList = (admins: { nickname: string }[]): string => {
+        return admins
+            .map((admin, index) => `${index + 1}. ${admin.nickname}`)
+            .join('\n');
+    };
+
     bot.onText(/^\/cancel(?:@\w+)?$/, async (msg) => {
         const chatId = msg.chat.id;
         const userId = msg.from?.id;
@@ -134,6 +143,101 @@ export function registerCancelCommand(
             });
 
             await bot.sendMessage(chatId, '❌ Действие отменено. Вы возвращены к выбору операции по складу.');
+            return;
+        }
+
+        const isEditAdminsEntryFlowState = currentState === AdminState.EDIT_ADMINS_SELECTING;
+        if (isEditAdminsEntryFlowState) {
+            const tempData = stateManager.getUserTempData<{
+                adminId?: number;
+                adminPermissionsLevel?: number;
+                editReturnState?: string;
+            }>(userId);
+
+            const adminId = tempData?.adminId;
+            const adminPermissionsLevel = tempData?.adminPermissionsLevel;
+            const returnState = tempData?.editReturnState || AdminState.AUTHENTICATED;
+
+            stateManager.setUserState(userId, returnState);
+            stateManager.resetUserTempData(userId);
+            if (adminId && adminPermissionsLevel) {
+                stateManager.setUserTempData(userId, { adminId, adminPermissionsLevel });
+            }
+
+            await bot.sendMessage(chatId, '❌ Редактирование администраторов отменено. Вы возвращены в предыдущее состояние.');
+            return;
+        }
+
+        const isEditAdminActionFlowState = currentState === AdminState.EDIT_ADMIN_ACTION_SELECTING;
+        if (isEditAdminActionFlowState) {
+            const tempData = stateManager.getUserTempData<{
+                adminId?: number;
+                adminPermissionsLevel?: number;
+                editReturnState?: string;
+            }>(userId);
+
+            const editableAdmins = (await adminService.getEditableAdmins())
+                .filter((admin) => admin.permissionsLevel < 2);
+
+            if (!editableAdmins.length) {
+                const adminId = tempData?.adminId;
+                const adminPermissionsLevel = tempData?.adminPermissionsLevel;
+                const returnState = tempData?.editReturnState || AdminState.AUTHENTICATED;
+
+                stateManager.setUserState(userId, returnState);
+                stateManager.resetUserTempData(userId);
+                if (adminId && adminPermissionsLevel) {
+                    stateManager.setUserTempData(userId, { adminId, adminPermissionsLevel });
+                }
+
+                await bot.sendMessage(chatId, '❌ Действие отменено. Список администраторов пуст. Вы возвращены в предыдущее состояние.');
+                return;
+            }
+
+            stateManager.setUserState(userId, AdminState.EDIT_ADMINS_SELECTING);
+            stateManager.resetUserTempData(userId);
+            stateManager.setUserTempData(userId, {
+                adminId: tempData?.adminId,
+                adminPermissionsLevel: tempData?.adminPermissionsLevel,
+                editReturnState: tempData?.editReturnState,
+                editAdmins: editableAdmins.map((admin) => ({
+                    id: admin.id,
+                    nickname: admin.nickname,
+                    isActive: admin.isActive
+                })),
+                selectedEditAdminId: undefined
+            });
+
+            await bot.sendMessage(
+                chatId,
+                `❌ Действие отменено. Вы возвращены к выбору администратора.\n\nВведите номер администратора:\n\n${formatEditableAdminsList(editableAdmins)}`
+            );
+            return;
+        }
+
+        const isEditAdminSubflowState = currentState === AdminState.EDIT_ADMIN_AWAITING_STATUS
+            || currentState === AdminState.EDIT_ADMIN_AWAITING_DELETE_CONFIRM
+            || currentState === AdminState.EDIT_ADMIN_AWAITING_PASSWORD;
+        if (isEditAdminSubflowState) {
+            const tempData = stateManager.getUserTempData<{
+                adminId?: number;
+                adminPermissionsLevel?: number;
+                selectedEditAdminId?: number;
+                editAdmins?: unknown[];
+                editReturnState?: string;
+            }>(userId);
+
+            stateManager.setUserState(userId, AdminState.EDIT_ADMIN_ACTION_SELECTING);
+            stateManager.resetUserTempData(userId);
+            stateManager.setUserTempData(userId, {
+                adminId: tempData?.adminId,
+                adminPermissionsLevel: tempData?.adminPermissionsLevel,
+                selectedEditAdminId: tempData?.selectedEditAdminId,
+                editAdmins: tempData?.editAdmins,
+                editReturnState: tempData?.editReturnState
+            });
+
+            await bot.sendMessage(chatId, '❌ Действие отменено. Вы возвращены к выбору операции по администратору.');
             return;
         }
 

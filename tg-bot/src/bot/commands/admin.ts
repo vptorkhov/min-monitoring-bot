@@ -26,7 +26,15 @@ type AdminSessionData = {
   createWarehouseName?: string;
   editWarehouses?: Warehouse[];
   selectedWarehouseId?: number;
+  editAdmins?: EditableAdminSessionItem[];
+  selectedEditAdminId?: number;
   editReturnState?: string;
+};
+
+type EditableAdminSessionItem = {
+  id: number;
+  nickname: string;
+  isActive: boolean;
 };
 
 function escapeMarkdown(text: string): string {
@@ -72,6 +80,36 @@ function parseWarehouseStatusInput(input: string): boolean | null {
   return null;
 }
 
+function getAdminStatusText(isActive: boolean): string {
+  return isActive ? "Активный" : "Отключен";
+}
+
+function parseAdminStatusInput(input: string): boolean | null {
+  const normalized = input.trim().toLowerCase().replace(/\s+/g, " ");
+
+  if (
+    normalized === "1" ||
+    normalized === "1." ||
+    normalized === "активный" ||
+    normalized === "1 активный" ||
+    normalized === "1. активный"
+  ) {
+    return true;
+  }
+
+  if (
+    normalized === "2" ||
+    normalized === "2." ||
+    normalized === "отключен" ||
+    normalized === "2 отключен" ||
+    normalized === "2. отключен"
+  ) {
+    return false;
+  }
+
+  return null;
+}
+
 function getAuthenticatedAdminWelcomeMessage(
   adminPermissionsLevel: number,
 ): string {
@@ -83,6 +121,7 @@ function getAuthenticatedAdminWelcomeMessage(
       "/admin_change_password",
       "/superadmin_create_warehouse",
       "/superadmin_edit_warehouses",
+      "/superadmin_edit_admins",
       "",
       "Общие команды админ-режима:",
       "/admin_logout",
@@ -156,7 +195,12 @@ export function registerAdminModeCommands(
       currentState === AdminState.EDIT_WAREHOUSE_AWAITING_NAME ||
       currentState === AdminState.EDIT_WAREHOUSE_AWAITING_ADDRESS ||
       currentState === AdminState.EDIT_WAREHOUSE_AWAITING_STATUS ||
-      currentState === AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM
+      currentState === AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM ||
+      currentState === AdminState.EDIT_ADMINS_SELECTING ||
+      currentState === AdminState.EDIT_ADMIN_ACTION_SELECTING ||
+      currentState === AdminState.EDIT_ADMIN_AWAITING_STATUS ||
+      currentState === AdminState.EDIT_ADMIN_AWAITING_DELETE_CONFIRM ||
+      currentState === AdminState.EDIT_ADMIN_AWAITING_PASSWORD
     );
   };
 
@@ -194,6 +238,88 @@ export function registerAdminModeCommands(
       `Выбран склад:\n<b>${safeName}</b> - <b>${safeAddress}</b>\nСтатус: <b>${status}</b>\n\nДоступные действия:\n${commandsList}`,
       { parse_mode: "HTML" },
     );
+  };
+
+  const formatEditableAdminsList = (admins: EditableAdminSessionItem[]): string => {
+    return admins
+      .map((admin, index) => `${index + 1}. <b>${escapeHtml(admin.nickname)}</b>`)
+      .join("\n");
+  };
+
+  const sendEditableAdminsListMessage = async (
+    chatId: number,
+    admins: EditableAdminSessionItem[],
+  ) => {
+    const listText = formatEditableAdminsList(admins);
+    await bot.sendMessage(
+      chatId,
+      `Введите номер администратора:\n\n${listText}`,
+      { parse_mode: "HTML" },
+    );
+  };
+
+  const sendAdminActionsMessage = async (
+    chatId: number,
+    admin: EditableAdminSessionItem,
+  ) => {
+    const commandsList = [
+      "/superadmin_edit_admin_status",
+      "/superadmin_edit_admin_delete",
+      "/superadmin_edit_admin_password",
+    ].join("\n");
+
+    await bot.sendMessage(
+      chatId,
+      `Выбран администратор:\n<b>${escapeHtml(admin.nickname)}</b>\nСтатус: <b>${getAdminStatusText(admin.isActive)}</b>\n\nДоступные действия:\n${commandsList}`,
+      { parse_mode: "HTML" },
+    );
+  };
+
+  const tryResolveSelectedAdmin = async (
+    telegramId: number,
+    chatId: number,
+  ): Promise<{ tempData: AdminSessionData; admin: EditableAdminSessionItem } | null> => {
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    const selectedEditAdminId = tempData.selectedEditAdminId;
+
+    if (!selectedEditAdminId) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора администратора через /superadmin_edit_admins.",
+      );
+      return null;
+    }
+
+    const admin = await adminService.getAdminById(selectedEditAdminId);
+    if (!admin || admin.permissionsLevel >= 2) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Выбранный администратор не найден. Запустите /superadmin_edit_admins заново.",
+      );
+      return null;
+    }
+
+    return {
+      tempData,
+      admin: {
+        id: admin.id,
+        nickname: admin.nickname,
+        isActive: admin.isActive,
+      },
+    };
+  };
+
+  const loadEditableAdmins = async (): Promise<EditableAdminSessionItem[]> => {
+    const admins = await adminService.getEditableAdmins();
+
+    return admins
+      .filter((admin) => admin.permissionsLevel < 2)
+      .map((admin) => ({
+        id: admin.id,
+        nickname: admin.nickname,
+        isActive: admin.isActive,
+      }));
   };
 
   const tryResolveSelectedWarehouse = async (
@@ -293,7 +419,12 @@ export function registerAdminModeCommands(
       currentState === AdminState.EDIT_WAREHOUSE_AWAITING_NAME ||
       currentState === AdminState.EDIT_WAREHOUSE_AWAITING_ADDRESS ||
       currentState === AdminState.EDIT_WAREHOUSE_AWAITING_STATUS ||
-      currentState === AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM;
+      currentState === AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM ||
+      currentState === AdminState.EDIT_ADMINS_SELECTING ||
+      currentState === AdminState.EDIT_ADMIN_ACTION_SELECTING ||
+      currentState === AdminState.EDIT_ADMIN_AWAITING_STATUS ||
+      currentState === AdminState.EDIT_ADMIN_AWAITING_DELETE_CONFIRM ||
+      currentState === AdminState.EDIT_ADMIN_AWAITING_PASSWORD;
 
     if (wasAuthenticated && adminId) {
       await adminService.setLoginStatus(adminId, false);
@@ -512,6 +643,159 @@ export function registerAdminModeCommands(
     );
   });
 
+  bot.onText(/^\/superadmin_edit_admins(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      return;
+    }
+
+    const currentState = stateManager.getUserState(telegramId);
+    if (!isInAuthenticatedOrSubflow(currentState)) {
+      await bot.sendMessage(
+        chatId,
+        "🔒 Эта команда доступна только авторизованному администратору. Используйте /admin_login.",
+      );
+      return;
+    }
+
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    const permissionsLevel = tempData.adminPermissionsLevel ?? 0;
+    if (permissionsLevel < 2) {
+      await bot.sendMessage(chatId, "🚫 Нет прав на эту команду.");
+      return;
+    }
+
+    const editableAdmins = await loadEditableAdmins();
+    if (!editableAdmins.length) {
+      await bot.sendMessage(chatId, "❌ Список администраторов пуст.");
+      return;
+    }
+
+    stateManager.setUserState(telegramId, AdminState.EDIT_ADMINS_SELECTING);
+    stateManager.setUserTempData(telegramId, {
+      editAdmins: editableAdmins,
+      selectedEditAdminId: undefined,
+      editReturnState: currentState || AdminState.AUTHENTICATED,
+    });
+
+    await sendEditableAdminsListMessage(chatId, editableAdmins);
+  });
+
+  bot.onText(/^\/superadmin_edit_admin_status(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора администратора через /superadmin_edit_admins.",
+      );
+      return;
+    }
+
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    if ((tempData.adminPermissionsLevel ?? 0) < 2) {
+      await bot.sendMessage(chatId, "🚫 Нет прав на эту команду.");
+      return;
+    }
+
+    const resolved = await tryResolveSelectedAdmin(telegramId, chatId);
+    if (!resolved) {
+      return;
+    }
+
+    stateManager.setUserState(telegramId, AdminState.EDIT_ADMIN_AWAITING_STATUS);
+    await bot.sendMessage(
+      chatId,
+      `Текущий статус администратора: ${getAdminStatusText(resolved.admin.isActive)}\n\nВыберите, какой статус должен быть у администратора:\n1. Активный\n2. Отключен`,
+    );
+  });
+
+  bot.onText(/^\/superadmin_edit_admin_delete(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора администратора через /superadmin_edit_admins.",
+      );
+      return;
+    }
+
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    if ((tempData.adminPermissionsLevel ?? 0) < 2) {
+      await bot.sendMessage(chatId, "🚫 Нет прав на эту команду.");
+      return;
+    }
+
+    const resolved = await tryResolveSelectedAdmin(telegramId, chatId);
+    if (!resolved) {
+      return;
+    }
+
+    stateManager.setUserState(
+      telegramId,
+      AdminState.EDIT_ADMIN_AWAITING_DELETE_CONFIRM,
+    );
+    await bot.sendMessage(
+      chatId,
+      "Вы уверены, что хотите удалить админа? Введите ДА",
+    );
+  });
+
+  bot.onText(/^\/superadmin_edit_admin_password(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора администратора через /superadmin_edit_admins.",
+      );
+      return;
+    }
+
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    if ((tempData.adminPermissionsLevel ?? 0) < 2) {
+      await bot.sendMessage(chatId, "🚫 Нет прав на эту команду.");
+      return;
+    }
+
+    const resolved = await tryResolveSelectedAdmin(telegramId, chatId);
+    if (!resolved) {
+      return;
+    }
+
+    stateManager.setUserState(
+      telegramId,
+      AdminState.EDIT_ADMIN_AWAITING_PASSWORD,
+    );
+    await bot.sendMessage(chatId, "Введите новый пароль, не менее 6 символов");
+  });
+
   bot.onText(/^\/superadmin_edit_warehouse_name(?:@\w+)?$/, async (msg) => {
     const chatId = msg.chat.id;
     const telegramId = msg.from?.id;
@@ -679,7 +963,12 @@ export function registerAdminModeCommands(
       currentState !== AdminState.EDIT_WAREHOUSE_AWAITING_NAME &&
       currentState !== AdminState.EDIT_WAREHOUSE_AWAITING_ADDRESS &&
       currentState !== AdminState.EDIT_WAREHOUSE_AWAITING_STATUS &&
-      currentState !== AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM
+      currentState !== AdminState.EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM &&
+      currentState !== AdminState.EDIT_ADMINS_SELECTING &&
+      currentState !== AdminState.EDIT_ADMIN_ACTION_SELECTING &&
+      currentState !== AdminState.EDIT_ADMIN_AWAITING_STATUS &&
+      currentState !== AdminState.EDIT_ADMIN_AWAITING_DELETE_CONFIRM &&
+      currentState !== AdminState.EDIT_ADMIN_AWAITING_PASSWORD
     ) {
       return;
     }
@@ -942,6 +1231,58 @@ export function registerAdminModeCommands(
       return;
     }
 
+    if (currentState === AdminState.EDIT_ADMINS_SELECTING) {
+      const tempData =
+        stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const admins = tempData.editAdmins;
+
+      if (!admins?.length) {
+        restoreToAuthenticatedWithAdminContext(telegramId, tempData);
+        await bot.sendMessage(
+          chatId,
+          "❌ Что-то пошло не так. Запустите /superadmin_edit_admins заново.",
+        );
+        return;
+      }
+
+      if (!/^\d+$/.test(text.trim())) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Введите корректный номер администратора из списка.",
+        );
+        return;
+      }
+
+      const index = parseInt(text.trim(), 10) - 1;
+      if (index < 0 || index >= admins.length) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Администратор с таким номером не найден. Введите номер из списка.",
+        );
+        return;
+      }
+
+      const selectedAdmin = admins[index];
+      stateManager.setUserState(
+        telegramId,
+        AdminState.EDIT_ADMIN_ACTION_SELECTING,
+      );
+      stateManager.setUserTempData(telegramId, {
+        selectedEditAdminId: selectedAdmin.id,
+      });
+
+      await sendAdminActionsMessage(chatId, selectedAdmin);
+      return;
+    }
+
+    if (currentState === AdminState.EDIT_ADMIN_ACTION_SELECTING) {
+      await bot.sendMessage(
+        chatId,
+        "ℹ️ Выберите действие командой: /superadmin_edit_admin_status, /superadmin_edit_admin_delete или /superadmin_edit_admin_password.",
+      );
+      return;
+    }
+
     if (currentState === AdminState.EDIT_WAREHOUSES_SELECTING) {
       const tempData =
         stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
@@ -983,6 +1324,14 @@ export function registerAdminModeCommands(
       });
 
       await sendWarehouseActionsMessage(chatId, selectedWarehouse);
+      return;
+    }
+
+    if (currentState === AdminState.EDIT_WAREHOUSE_ACTION_SELECTING) {
+      await bot.sendMessage(
+        chatId,
+        "ℹ️ Выберите действие командой: /superadmin_edit_warehouse_name, /superadmin_edit_warehouse_address, /superadmin_edit_warehouse_status или /superadmin_edit_warehouse_delete.",
+      );
       return;
     }
 
@@ -1206,6 +1555,164 @@ export function registerAdminModeCommands(
       }
 
       await bot.sendMessage(chatId, "✅ Склад успешно удален.");
+      return;
+    }
+
+    if (currentState === AdminState.EDIT_ADMIN_AWAITING_STATUS) {
+      const status = parseAdminStatusInput(text);
+      if (status === null) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Некорректный выбор статуса. Введите 1 (Активный) или 2 (Отключен).",
+        );
+        return;
+      }
+
+      const resolved = await tryResolveSelectedAdmin(telegramId, chatId);
+      if (!resolved) {
+        return;
+      }
+
+      const changeResult = await adminService.changeAdminActiveStatus(
+        resolved.admin.id,
+        status,
+      );
+      if (!changeResult.success) {
+        await bot.sendMessage(
+          chatId,
+          `❌ ${changeResult.reason || "Не удалось изменить статус администратора."}`,
+        );
+        return;
+      }
+
+      const updatedAdmin = await adminService.getAdminById(resolved.admin.id);
+      if (!updatedAdmin || updatedAdmin.permissionsLevel >= 2) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Администратор не найден. Запустите /superadmin_edit_admins заново.",
+        );
+        return;
+      }
+
+      const updatedAdminForSession: EditableAdminSessionItem = {
+        id: updatedAdmin.id,
+        nickname: updatedAdmin.nickname,
+        isActive: updatedAdmin.isActive,
+      };
+
+      const tempData =
+        stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const updatedList = (tempData.editAdmins || []).map((admin) =>
+        admin.id === updatedAdminForSession.id ? updatedAdminForSession : admin,
+      );
+
+      stateManager.setUserState(
+        telegramId,
+        AdminState.EDIT_ADMIN_ACTION_SELECTING,
+      );
+      stateManager.setUserTempData(telegramId, {
+        editAdmins: updatedList,
+      });
+
+      await bot.sendMessage(
+        chatId,
+        `✅ Статус администратора изменен на <b>${getAdminStatusText(updatedAdminForSession.isActive)}</b>`,
+        { parse_mode: "HTML" },
+      );
+      await sendAdminActionsMessage(chatId, updatedAdminForSession);
+      return;
+    }
+
+    if (currentState === AdminState.EDIT_ADMIN_AWAITING_DELETE_CONFIRM) {
+      if (text.trim() !== "ДА") {
+        await bot.sendMessage(
+          chatId,
+          "❌ Для удаления администратора введите строго ДА.",
+        );
+        return;
+      }
+
+      const resolved = await tryResolveSelectedAdmin(telegramId, chatId);
+      if (!resolved) {
+        return;
+      }
+
+      const deleteResult = await adminService.deleteAdmin(resolved.admin.id);
+      if (!deleteResult.success) {
+        await bot.sendMessage(
+          chatId,
+          `❌ ${deleteResult.reason || "Не удалось удалить администратора."}`,
+        );
+        return;
+      }
+
+      const tempData =
+        stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const editableAdmins = await loadEditableAdmins();
+      if (!editableAdmins.length) {
+        const fallbackState =
+          tempData.editReturnState || AdminState.AUTHENTICATED;
+        stateManager.setUserState(telegramId, fallbackState);
+        stateManager.resetUserTempData(telegramId);
+        if (tempData.adminId && tempData.adminPermissionsLevel) {
+          stateManager.setUserTempData(telegramId, {
+            adminId: tempData.adminId,
+            adminPermissionsLevel: tempData.adminPermissionsLevel,
+          });
+        }
+
+        await bot.sendMessage(
+          chatId,
+          "✅ Администратор успешно удален. Больше администраторов нет. Вы возвращены в предыдущее состояние.",
+        );
+        return;
+      }
+
+      stateManager.setUserState(telegramId, AdminState.EDIT_ADMINS_SELECTING);
+      stateManager.setUserTempData(telegramId, {
+        editAdmins: editableAdmins,
+        selectedEditAdminId: undefined,
+      });
+
+      await bot.sendMessage(chatId, "✅ Администратор успешно удален.");
+      await sendEditableAdminsListMessage(chatId, editableAdmins);
+      return;
+    }
+
+    if (currentState === AdminState.EDIT_ADMIN_AWAITING_PASSWORD) {
+      const passwordInput = text.trim();
+      const passwordValidation = adminService.validatePassword(passwordInput);
+      if (!passwordValidation.isValid) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Пароль должен содержать минимум 6 символов.\n\nВведите новый пароль, не менее 6 символов",
+        );
+        return;
+      }
+
+      const resolved = await tryResolveSelectedAdmin(telegramId, chatId);
+      if (!resolved) {
+        return;
+      }
+
+      const result = await adminService.changePassword(
+        resolved.admin.id,
+        passwordInput,
+      );
+      if (!result.success) {
+        await bot.sendMessage(
+          chatId,
+          `❌ ${result.reason || "Не удалось сменить пароль."}\n\nВведите новый пароль, не менее 6 символов`,
+        );
+        return;
+      }
+
+      stateManager.setUserState(
+        telegramId,
+        AdminState.EDIT_ADMIN_ACTION_SELECTING,
+      );
+      await bot.sendMessage(chatId, "✅ Пароль администратора успешно изменен.");
+      await sendAdminActionsMessage(chatId, resolved.admin);
       return;
     }
 

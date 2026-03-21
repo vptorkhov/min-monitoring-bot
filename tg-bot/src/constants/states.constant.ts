@@ -45,7 +45,12 @@ export const AdminState = {
     EDIT_WAREHOUSE_AWAITING_NAME: 'admin_edit_warehouse_awaiting_name',
     EDIT_WAREHOUSE_AWAITING_ADDRESS: 'admin_edit_warehouse_awaiting_address',
     EDIT_WAREHOUSE_AWAITING_STATUS: 'admin_edit_warehouse_awaiting_status',
-    EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM: 'admin_edit_warehouse_awaiting_delete_confirm'
+    EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM: 'admin_edit_warehouse_awaiting_delete_confirm',
+    EDIT_ADMINS_SELECTING: 'admin_edit_admins_selecting',
+    EDIT_ADMIN_ACTION_SELECTING: 'admin_edit_admin_action_selecting',
+    EDIT_ADMIN_AWAITING_STATUS: 'admin_edit_admin_awaiting_status',
+    EDIT_ADMIN_AWAITING_DELETE_CONFIRM: 'admin_edit_admin_awaiting_delete_confirm',
+    EDIT_ADMIN_AWAITING_PASSWORD: 'admin_edit_admin_awaiting_password'
 } as const;
 
 // Тип для состояний админ-режима

@@ -20,6 +20,18 @@ export interface AdminChangePasswordResult {
     reason?: string;
 }
 
+export interface EditableAdmin {
+    id: number;
+    nickname: string;
+    permissionsLevel: number;
+    isActive: boolean;
+}
+
+export interface AdminMutateResult {
+    success: boolean;
+    reason?: string;
+}
+
 export class AdminService {
     private repository: AdminRepository;
 
@@ -129,6 +141,57 @@ export class AdminService {
             return {
                 success: false,
                 reason: 'Не удалось обновить пароль администратора.'
+            };
+        }
+
+        return { success: true };
+    }
+
+    async getEditableAdmins(): Promise<EditableAdmin[]> {
+        const admins = await this.repository.getEditableAdmins();
+
+        return admins.map((admin) => ({
+            id: admin.id,
+            nickname: admin.nickname,
+            permissionsLevel: admin.permissions_level,
+            isActive: admin.is_active
+        }));
+    }
+
+    async getAdminById(adminId: number): Promise<EditableAdmin | null> {
+        const admin = await this.repository.getById(adminId);
+        if (!admin) {
+            return null;
+        }
+
+        return {
+            id: admin.id,
+            nickname: admin.nickname,
+            permissionsLevel: admin.permissions_level,
+            isActive: admin.is_active
+        };
+    }
+
+    async changeAdminActiveStatus(adminId: number, isActive: boolean): Promise<AdminMutateResult> {
+        const updated = await this.repository.updateActiveStatus(adminId, isActive);
+
+        if (!updated) {
+            return {
+                success: false,
+                reason: 'Не удалось изменить статус администратора.'
+            };
+        }
+
+        return { success: true };
+    }
+
+    async deleteAdmin(adminId: number): Promise<AdminMutateResult> {
+        const deleted = await this.repository.deleteById(adminId);
+
+        if (!deleted) {
+            return {
+                success: false,
+                reason: 'Не удалось удалить администратора.'
             };
         }
 

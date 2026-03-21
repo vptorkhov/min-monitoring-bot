@@ -12,6 +12,13 @@ export interface AdminFromDB {
     created_at: Date;
 }
 
+export interface EditableAdminFromDB {
+    id: number;
+    nickname: string;
+    permissions_level: number;
+    is_active: boolean;
+}
+
 export class AdminRepository {
     private db: Pool;
 
@@ -62,6 +69,44 @@ export class AdminRepository {
         const result = await this.db.query(
             'UPDATE admins SET password_hash = $2 WHERE id = $1',
             [adminId, passwordHash]
+        );
+
+        return (result.rowCount ?? 0) > 0;
+    }
+
+    async getEditableAdmins(): Promise<EditableAdminFromDB[]> {
+        const result = await this.db.query<EditableAdminFromDB>(
+            `SELECT id, nickname, permissions_level, is_active
+             FROM admins
+             WHERE permissions_level < 2
+             ORDER BY LOWER(nickname) ASC, id ASC`
+        );
+
+        return result.rows;
+    }
+
+    async getById(adminId: number): Promise<AdminFromDB | null> {
+        const result = await this.db.query<AdminFromDB>(
+            'SELECT * FROM admins WHERE id = $1 LIMIT 1',
+            [adminId]
+        );
+
+        return result.rows[0] || null;
+    }
+
+    async updateActiveStatus(adminId: number, isActive: boolean): Promise<boolean> {
+        const result = await this.db.query(
+            'UPDATE admins SET is_active = $2 WHERE id = $1',
+            [adminId, isActive]
+        );
+
+        return (result.rowCount ?? 0) > 0;
+    }
+
+    async deleteById(adminId: number): Promise<boolean> {
+        const result = await this.db.query(
+            'DELETE FROM admins WHERE id = $1',
+            [adminId]
         );
 
         return (result.rowCount ?? 0) > 0;

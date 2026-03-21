@@ -23,7 +23,11 @@ export const BOT_COMMANDS = [
     '/superadmin_edit_warehouse_name',
     '/superadmin_edit_warehouse_address',
     '/superadmin_edit_warehouse_status',
-    '/superadmin_edit_warehouse_delete'
+    '/superadmin_edit_warehouse_delete',
+    '/superadmin_edit_admins',
+    '/superadmin_edit_admin_status',
+    '/superadmin_edit_admin_delete',
+    '/superadmin_edit_admin_password'
     // здесь будут добавляться остальные команды
 ] as const;
 
