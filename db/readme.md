@@ -72,6 +72,7 @@
 - **nickname** VARCHAR(50) NOT NULL UNIQUE
 - **password_hash** VARCHAR(200) NOT NULL
 - **permissions_level** INTEGER DEFAULT 1 (1 — обычный, 2 — суперадмин)
+- **is_active** BOOLEAN NOT NULL DEFAULT FALSE — флаг допуска администратора (после одобрения суперадмином)
 - **is_login** BOOLEAN DEFAULT FALSE
 - **created_at** TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 

@@ -140,9 +140,14 @@ CREATE TABLE IF NOT EXISTS admins (
     nickname VARCHAR(50) NOT NULL UNIQUE,
     password_hash VARCHAR(200) NOT NULL,
     permissions_level INTEGER DEFAULT 1,
+    is_active BOOLEAN NOT NULL DEFAULT FALSE,
     is_login BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Добавляем поле при обновлении уже существующей таблицы
+ALTER TABLE admins
+ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Комментарии к таблице и колонкам
 COMMENT ON TABLE admins IS 'Администраторы системы';
@@ -150,6 +155,7 @@ COMMENT ON COLUMN admins.id IS 'Уникальный идентификатор 
 COMMENT ON COLUMN admins.nickname IS 'Никнейм администратора';
 COMMENT ON COLUMN admins.password_hash IS 'Хеш пароля';
 COMMENT ON COLUMN admins.permissions_level IS 'Уровень доступа (1 - обычный, 2 - суперадмин)';
+COMMENT ON COLUMN admins.is_active IS 'Активен ли администратор (допущен к работе)';
 COMMENT ON COLUMN admins.is_login IS 'Статус авторизации';
 COMMENT ON COLUMN admins.created_at IS 'Дата создания записи';
 
@@ -159,6 +165,9 @@ CREATE INDEX idx_admins_nickname ON admins(nickname);
 -- Индекс для поиска по уровню доступа
 CREATE INDEX idx_admins_permissions ON admins(permissions_level);
 
+-- Индекс для фильтрации по активности
+CREATE INDEX idx_admins_is_active ON admins(is_active);
+
 -- Создание суперадмина
-INSERT INTO admins (nickname, password_hash, permissions_level) 
-VALUES ('superadmin', '28efb68dcba507ecd182bead31e4e2d159b0f9185861d1ebfe60a12dfb310300', 2);
+INSERT INTO admins (nickname, password_hash, permissions_level, is_active)
+VALUES ('superadmin', '28efb68dcba507ecd182bead31e4e2d159b0f9185861d1ebfe60a12dfb310300', 2, TRUE);

@@ -262,6 +262,7 @@ min-monitoring-bot/
 | nickname          | VARCHAR(50)  | Никнейм администратора                        |
 | password_hash     | VARCHAR(200) | Хеш пароля                                    |
 | permissions_level | INTEGER      | Уровень доступа (1 - обычный, 2 - суперадмин) |
+| is_active         | BOOLEAN      | Активен ли администратор (одобрен суперадмином) |
 | is_login          | BOOLEAN      | Статус авторизации                            |
 | created_at        | TIMESTAMP    | Дата создания                                 |
 
