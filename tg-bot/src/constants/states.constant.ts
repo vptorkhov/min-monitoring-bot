@@ -53,6 +53,8 @@ export const AdminState = {
     EDIT_ADMIN_AWAITING_STATUS: 'admin_edit_admin_awaiting_status',
     EDIT_ADMIN_AWAITING_DELETE_CONFIRM: 'admin_edit_admin_awaiting_delete_confirm',
     EDIT_ADMIN_AWAITING_PASSWORD: 'admin_edit_admin_awaiting_password',
+    APPLY_REGISTRATIONS_SELECTING: 'admin_apply_registrations_selecting',
+    APPLY_REGISTRATION_AWAITING_CONFIRM: 'admin_apply_registration_awaiting_confirm',
     ADD_SIM_AWAITING_NUMBER: 'admin_add_sim_awaiting_number',
     SIM_INTERACTIONS_SELECTING: 'admin_sim_interactions_selecting',
     SIM_INTERACTION_ACTION_SELECTING: 'admin_sim_interaction_action_selecting',

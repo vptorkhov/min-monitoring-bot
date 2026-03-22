@@ -37,6 +37,9 @@ type AdminSessionData = {
   editAdmins?: EditableAdminSessionItem[];
   selectedEditAdminId?: number;
   editReturnState?: string;
+  applyRegistrations?: PendingCourierApprovalSessionItem[];
+  selectedApplyCourierId?: number;
+  applyRegistrationsReturnState?: string;
   addSimWarehouseId?: number;
   simInteractionWarehouseId?: number;
   simInteractionDevices?: SimInteractionSessionItem[];
@@ -54,6 +57,12 @@ type SimInteractionSessionItem = {
   deviceNumber: string;
   isActive: boolean;
   status: string;
+};
+
+type PendingCourierApprovalSessionItem = {
+  id: number;
+  fullName: string;
+  nickname: string | null;
 };
 
 function escapeMarkdown(text: string): string {
@@ -150,6 +159,7 @@ function getAuthenticatedAdminWelcomeMessage(
       "",
       "Доступные команды:",
       "/admin_change_password",
+      "/admin_apply_registrations",
       "/superadmin_create_warehouse",
       "/superadmin_edit_warehouses",
       "/superadmin_edit_admins",
@@ -167,6 +177,7 @@ function getAuthenticatedAdminWelcomeMessage(
     "",
     "Доступные команды:",
     "/admin_change_password",
+    "/admin_apply_registrations",
     ...warehouseCommands,
     "",
     "Общие команды админ-режима:",
@@ -356,6 +367,8 @@ export function registerAdminModeCommands(
       currentState === AdminState.EDIT_ADMIN_AWAITING_STATUS ||
       currentState === AdminState.EDIT_ADMIN_AWAITING_DELETE_CONFIRM ||
       currentState === AdminState.EDIT_ADMIN_AWAITING_PASSWORD ||
+      currentState === AdminState.APPLY_REGISTRATIONS_SELECTING ||
+      currentState === AdminState.APPLY_REGISTRATION_AWAITING_CONFIRM ||
       currentState === AdminState.ADD_SIM_AWAITING_NUMBER ||
       currentState === AdminState.SIM_INTERACTIONS_SELECTING ||
       currentState === AdminState.SIM_INTERACTION_ACTION_SELECTING ||
@@ -430,6 +443,44 @@ export function registerAdminModeCommands(
       `Введите номер администратора:\n\n${listText}`,
       { parse_mode: "HTML" },
     );
+  };
+
+  const loadPendingCourierApprovals = async (): Promise<
+    PendingCourierApprovalSessionItem[]
+  > => {
+    const couriers = await courierService.getPendingApprovalCouriers();
+
+    return couriers.map((courier) => ({
+      id: courier.id,
+      fullName: courier.full_name,
+      nickname: courier.nickname,
+    }));
+  };
+
+  const formatPendingCourierApprovalsList = (
+    couriers: PendingCourierApprovalSessionItem[],
+  ): string => {
+    return couriers
+      .map((courier, index) => {
+        const base = `${index + 1}. <b>${escapeHtml(courier.fullName)}</b>`;
+        if (!courier.nickname) {
+          return base;
+        }
+
+        return `${base} <b>${escapeHtml(courier.nickname)}</b>`;
+      })
+      .join("\n");
+  };
+
+  const sendPendingCourierApprovalsListMessage = async (
+    chatId: number,
+    couriers: PendingCourierApprovalSessionItem[],
+  ) => {
+    const listText = formatPendingCourierApprovalsList(couriers);
+
+    await bot.sendMessage(chatId, `Выберите номер курьера:\n\n${listText}`, {
+      parse_mode: "HTML",
+    });
   };
 
   const sendAdminActionsMessage = async (
@@ -621,6 +672,38 @@ export function registerAdminModeCommands(
       }));
   };
 
+  const tryResolveSelectedApplyCourier = async (
+    telegramId: number,
+    chatId: number,
+  ): Promise<
+    { tempData: AdminSessionData; courier: PendingCourierApprovalSessionItem } | null
+  > => {
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    const selectedApplyCourierId = tempData.selectedApplyCourierId;
+
+    if (!selectedApplyCourierId) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора курьера через /admin_apply_registrations.",
+      );
+      return null;
+    }
+
+    const candidates = await loadPendingCourierApprovals();
+    const courier = candidates.find((item) => item.id === selectedApplyCourierId);
+
+    if (!courier) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Выбранный курьер больше недоступен. Запустите /admin_apply_registrations заново.",
+      );
+      return null;
+    }
+
+    return { tempData, courier };
+  };
+
   const tryResolveSelectedWarehouse = async (
     telegramId: number,
     chatId: number,
@@ -726,6 +809,8 @@ export function registerAdminModeCommands(
       currentState === AdminState.EDIT_ADMIN_AWAITING_STATUS ||
       currentState === AdminState.EDIT_ADMIN_AWAITING_DELETE_CONFIRM ||
       currentState === AdminState.EDIT_ADMIN_AWAITING_PASSWORD ||
+      currentState === AdminState.APPLY_REGISTRATIONS_SELECTING ||
+      currentState === AdminState.APPLY_REGISTRATION_AWAITING_CONFIRM ||
       currentState === AdminState.ADD_SIM_AWAITING_NUMBER ||
       currentState === AdminState.SIM_INTERACTIONS_SELECTING ||
       currentState === AdminState.SIM_INTERACTION_ACTION_SELECTING ||
@@ -1384,6 +1469,66 @@ export function registerAdminModeCommands(
     );
   });
 
+  bot.onText(/^\/admin_apply_registrations(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "ℹ️ Сначала войдите в админский режим командой /admin.",
+      );
+      return;
+    }
+
+    const currentState = stateManager.getUserState(telegramId);
+    if (!isInAuthenticatedOrSubflow(currentState)) {
+      await bot.sendMessage(
+        chatId,
+        "🔒 Эта команда доступна только авторизованному администратору. Используйте /admin_login.",
+      );
+      return;
+    }
+
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    if (!tempData.adminId || !tempData.adminPermissionsLevel) {
+      stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+      await bot.sendMessage(
+        chatId,
+        "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
+      );
+      return;
+    }
+
+    if (tempData.adminPermissionsLevel < 1) {
+      await bot.sendMessage(chatId, "🚫 Нет прав на эту команду.");
+      return;
+    }
+
+    const pendingCouriers = await loadPendingCourierApprovals();
+    if (!pendingCouriers.length) {
+      await bot.sendMessage(
+        chatId,
+        "ℹ️ Нет неактивных курьеров без записей о сессиях.",
+      );
+      return;
+    }
+
+    stateManager.setUserState(telegramId, AdminState.APPLY_REGISTRATIONS_SELECTING);
+    stateManager.setUserTempData(telegramId, {
+      applyRegistrations: pendingCouriers,
+      selectedApplyCourierId: undefined,
+      applyRegistrationsReturnState: currentState || AdminState.AUTHENTICATED,
+    });
+
+    await sendPendingCourierApprovalsListMessage(chatId, pendingCouriers);
+  });
+
   bot.onText(/^\/admin_add_sim(?:@\w+)?$/, async (msg) => {
     const chatId = msg.chat.id;
     const telegramId = msg.from?.id;
@@ -1719,6 +1864,8 @@ export function registerAdminModeCommands(
       currentState !== AdminState.EDIT_ADMIN_AWAITING_STATUS &&
       currentState !== AdminState.EDIT_ADMIN_AWAITING_DELETE_CONFIRM &&
       currentState !== AdminState.EDIT_ADMIN_AWAITING_PASSWORD &&
+      currentState !== AdminState.APPLY_REGISTRATIONS_SELECTING &&
+      currentState !== AdminState.APPLY_REGISTRATION_AWAITING_CONFIRM &&
       currentState !== AdminState.ADD_SIM_AWAITING_NUMBER &&
       currentState !== AdminState.SIM_INTERACTIONS_SELECTING &&
       currentState !== AdminState.SIM_INTERACTION_ACTION_SELECTING &&
@@ -2574,6 +2721,127 @@ export function registerAdminModeCommands(
       );
       await bot.sendMessage(chatId, "✅ Пароль администратора успешно изменен.");
       await sendAdminActionsMessage(chatId, resolved.admin);
+      return;
+    }
+
+    if (currentState === AdminState.APPLY_REGISTRATIONS_SELECTING) {
+      const tempData =
+        stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const pendingCouriers = tempData.applyRegistrations;
+
+      if (!pendingCouriers?.length) {
+        const refreshed = await loadPendingCourierApprovals();
+        if (!refreshed.length) {
+          restoreToAuthenticatedWithAdminContext(
+            telegramId,
+            tempData,
+            tempData.applyRegistrationsReturnState,
+          );
+          await bot.sendMessage(
+            chatId,
+            "ℹ️ Нет неактивных курьеров без записей о сессиях.",
+          );
+          return;
+        }
+
+        stateManager.setUserTempData(telegramId, { applyRegistrations: refreshed });
+        await sendPendingCourierApprovalsListMessage(chatId, refreshed);
+        return;
+      }
+
+      if (!/^\d+$/.test(text.trim())) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Введите корректный номер курьера из списка.",
+        );
+        return;
+      }
+
+      const index = parseInt(text.trim(), 10) - 1;
+      if (index < 0 || index >= pendingCouriers.length) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Курьер с таким номером не найден. Введите номер из списка.",
+        );
+        return;
+      }
+
+      const selectedCourier = pendingCouriers[index];
+      stateManager.setUserState(
+        telegramId,
+        AdminState.APPLY_REGISTRATION_AWAITING_CONFIRM,
+      );
+      stateManager.setUserTempData(telegramId, {
+        selectedApplyCourierId: selectedCourier.id,
+      });
+
+      await bot.sendMessage(
+        chatId,
+        'Вы принимаете регистрацию пользователя? Введите "Да" или "Нет"',
+      );
+      return;
+    }
+
+    if (currentState === AdminState.APPLY_REGISTRATION_AWAITING_CONFIRM) {
+      const normalized = text.trim().toLowerCase();
+      if (normalized !== "да" && normalized !== "нет") {
+        await bot.sendMessage(
+          chatId,
+          '❌ Некорректный ответ. Введите "Да" или "Нет".',
+        );
+        return;
+      }
+
+      const resolved = await tryResolveSelectedApplyCourier(telegramId, chatId);
+      if (!resolved) {
+        return;
+      }
+
+      if (normalized === "да") {
+        const activateResult = await courierService.activateCourier(
+          resolved.courier.id,
+        );
+        if (!activateResult.success) {
+          await bot.sendMessage(
+            chatId,
+            `❌ ${activateResult.reason || "Не удалось активировать курьера."}`,
+          );
+          return;
+        }
+
+        await bot.sendMessage(
+          chatId,
+          `✅ Регистрация курьера <b>${escapeHtml(resolved.courier.fullName)}</b> принята.`,
+          { parse_mode: "HTML" },
+        );
+      } else {
+        await bot.sendMessage(
+          chatId,
+          `ℹ️ Курьер <b>${escapeHtml(resolved.courier.fullName)}</b> остался неактивным.`,
+          { parse_mode: "HTML" },
+        );
+      }
+
+      const refreshed = await loadPendingCourierApprovals();
+      if (!refreshed.length) {
+        restoreToAuthenticatedWithAdminContext(
+          telegramId,
+          resolved.tempData,
+          resolved.tempData.applyRegistrationsReturnState,
+        );
+        await bot.sendMessage(
+          chatId,
+          "ℹ️ Нет неактивных курьеров без записей о сессиях. Вы возвращены в предыдущее состояние.",
+        );
+        return;
+      }
+
+      stateManager.setUserState(telegramId, AdminState.APPLY_REGISTRATIONS_SELECTING);
+      stateManager.setUserTempData(telegramId, {
+        applyRegistrations: refreshed,
+        selectedApplyCourierId: undefined,
+      });
+      await sendPendingCourierApprovalsListMessage(chatId, refreshed);
       return;
     }
 

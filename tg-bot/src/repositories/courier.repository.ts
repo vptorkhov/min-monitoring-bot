@@ -24,6 +24,13 @@ export interface CourierFromDB {
     updated_at: Date;
 }
 
+export interface PendingCourierApprovalCandidate {
+    id: number;
+    telegram_id: number;
+    full_name: string;
+    nickname: string | null;
+}
+
 export class CourierRepository {
     constructor(private pool: Pool) { }
 
@@ -32,6 +39,15 @@ export class CourierRepository {
         const result = await this.pool.query<CourierFromDB>(
             'SELECT * FROM couriers WHERE telegram_id = $1',
             [telegramId]
+        );
+
+        return result.rows[0] || null;
+    }
+
+    async findById(id: number): Promise<CourierFromDB | null> {
+        const result = await this.pool.query<CourierFromDB>(
+            'SELECT * FROM couriers WHERE id = $1',
+            [id]
         );
 
         return result.rows[0] || null;
@@ -70,6 +86,22 @@ export class CourierRepository {
         );
 
         return (result.rowCount ?? 0) > 0;
+    }
+
+    async findInactiveWithoutSessions(): Promise<PendingCourierApprovalCandidate[]> {
+        const result = await this.pool.query<PendingCourierApprovalCandidate>(
+            `SELECT c.id, c.telegram_id, c.full_name, c.nickname
+             FROM couriers c
+             WHERE c.is_active = false
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM session s
+                   WHERE s.courier_id = c.id
+               )
+             ORDER BY c.created_at ASC, c.id ASC`
+        );
+
+        return result.rows;
     }
 
     // Получить всех активированных курьеров

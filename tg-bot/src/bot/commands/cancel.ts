@@ -274,6 +274,81 @@ export function registerCancelCommand(
             return;
         }
 
+        const isApplyRegistrationsSelectingState = currentState === AdminState.APPLY_REGISTRATIONS_SELECTING;
+        if (isApplyRegistrationsSelectingState) {
+            const tempData = stateManager.getUserTempData<{
+                adminId?: number;
+                adminPermissionsLevel?: number;
+                applyRegistrationsReturnState?: string;
+            }>(userId);
+
+            const adminId = tempData?.adminId;
+            const adminPermissionsLevel = tempData?.adminPermissionsLevel;
+            const returnState = tempData?.applyRegistrationsReturnState || AdminState.AUTHENTICATED;
+
+            stateManager.setUserState(userId, returnState);
+            stateManager.resetUserTempData(userId);
+            if (adminId && adminPermissionsLevel) {
+                stateManager.setUserTempData(userId, { adminId, adminPermissionsLevel });
+            }
+
+            await bot.sendMessage(chatId, '❌ Принятие регистраций отменено. Вы возвращены в предыдущее состояние.');
+            return;
+        }
+
+        const isApplyRegistrationConfirmState = currentState === AdminState.APPLY_REGISTRATION_AWAITING_CONFIRM;
+        if (isApplyRegistrationConfirmState) {
+            const tempData = stateManager.getUserTempData<{
+                adminId?: number;
+                adminPermissionsLevel?: number;
+                applyRegistrationsReturnState?: string;
+            }>(userId);
+
+            const refreshedCouriers = (await courierService.getPendingApprovalCouriers()).map((courier) => ({
+                id: courier.id,
+                fullName: courier.full_name,
+                nickname: courier.nickname
+            }));
+
+            if (!refreshedCouriers.length) {
+                const adminId = tempData?.adminId;
+                const adminPermissionsLevel = tempData?.adminPermissionsLevel;
+                const returnState = tempData?.applyRegistrationsReturnState || AdminState.AUTHENTICATED;
+
+                stateManager.setUserState(userId, returnState);
+                stateManager.resetUserTempData(userId);
+                if (adminId && adminPermissionsLevel) {
+                    stateManager.setUserTempData(userId, { adminId, adminPermissionsLevel });
+                }
+
+                await bot.sendMessage(chatId, '❌ Действие отменено. Список неактивных курьеров пуст, вы возвращены в предыдущее состояние.');
+                return;
+            }
+
+            const listText = refreshedCouriers
+                .map((courier, index) => {
+                    const base = `${index + 1}. ${courier.fullName}`;
+                    return courier.nickname ? `${base} ${courier.nickname}` : base;
+                })
+                .join('\n');
+
+            stateManager.setUserState(userId, AdminState.APPLY_REGISTRATIONS_SELECTING);
+            stateManager.resetUserTempData(userId);
+            stateManager.setUserTempData(userId, {
+                adminId: tempData?.adminId,
+                adminPermissionsLevel: tempData?.adminPermissionsLevel,
+                applyRegistrationsReturnState: tempData?.applyRegistrationsReturnState,
+                applyRegistrations: refreshedCouriers,
+                selectedApplyCourierId: undefined
+            });
+
+            await bot.sendMessage(
+                chatId,
+                `❌ Действие отменено. Вы возвращены к списку неактивных курьеров.\n\nВыберите номер курьера:\n\n${listText}`
+            );
+            return;
+        }
+
         const isAddSimFlowState = currentState === AdminState.ADD_SIM_AWAITING_NUMBER;
         if (isAddSimFlowState) {
             const tempData = stateManager.getUserTempData<{
