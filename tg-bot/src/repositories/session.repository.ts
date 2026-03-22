@@ -15,6 +15,28 @@ export interface SessionRecord {
     is_active: boolean;
 }
 
+export interface ActiveSessionByDeviceRecord {
+    id: number;
+    courier_id: number;
+    device_id: number;
+    warehouse_id: number;
+    start_date: Date;
+    end_date: Date | null;
+    sim_status_after: string | null;
+    status_comment: string | null;
+    is_active: boolean;
+    courier_full_name: string;
+}
+
+export interface SessionHistoryByDeviceRecord {
+    start_date: Date;
+    end_date: Date | null;
+    sim_status_after: string | null;
+    status_comment: string | null;
+    is_active: boolean;
+    courier_full_name: string;
+}
+
 export class SessionRepository {
     private db: Pool;
 
@@ -59,5 +81,70 @@ export class SessionRepository {
         const query = `SELECT * FROM session WHERE id = $1 LIMIT 1`;
         const { rows } = await this.db.query<SessionRecord>(query, [id]);
         return rows[0] ?? null;
+    }
+
+    public async findActiveByDevice(deviceId: number): Promise<ActiveSessionByDeviceRecord | null> {
+        const query = `
+            SELECT
+                s.*,
+                c.full_name AS courier_full_name
+            FROM session s
+            INNER JOIN couriers c ON c.id = s.courier_id
+            WHERE s.device_id = $1
+              AND s.is_active = true
+            ORDER BY s.start_date DESC, s.id DESC
+            LIMIT 1
+        `;
+
+        const { rows } = await this.db.query<ActiveSessionByDeviceRecord>(query, [deviceId]);
+        return rows[0] ?? null;
+    }
+
+    public async hasActiveByDevice(deviceId: number): Promise<boolean> {
+        const query = `
+            SELECT 1
+            FROM session
+            WHERE device_id = $1
+              AND is_active = true
+            LIMIT 1
+        `;
+
+        const result = await this.db.query<{ one: number }>(query, [deviceId]);
+        return (result.rowCount ?? 0) > 0;
+    }
+
+    public async getHistoryByDevice(deviceId: number): Promise<SessionHistoryByDeviceRecord[]> {
+        const query = `
+            SELECT
+                s.start_date,
+                s.end_date,
+                s.sim_status_after,
+                s.status_comment,
+                s.is_active,
+                c.full_name AS courier_full_name
+            FROM session s
+            INNER JOIN couriers c ON c.id = s.courier_id
+            WHERE s.device_id = $1
+            ORDER BY s.start_date DESC, s.id DESC
+        `;
+
+        const { rows } = await this.db.query<SessionHistoryByDeviceRecord>(query, [deviceId]);
+        return rows;
+    }
+
+    public async getLastMalfunctionCommentByDevice(deviceId: number): Promise<string | null> {
+        const query = `
+            SELECT status_comment
+            FROM session
+            WHERE device_id = $1
+              AND sim_status_after IN ('warning', 'broken')
+              AND status_comment IS NOT NULL
+              AND TRIM(status_comment) <> ''
+            ORDER BY end_date DESC NULLS LAST, id DESC
+            LIMIT 1
+        `;
+
+        const { rows } = await this.db.query<{ status_comment: string }>(query, [deviceId]);
+        return rows[0]?.status_comment ?? null;
     }
 }

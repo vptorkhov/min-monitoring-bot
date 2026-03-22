@@ -105,6 +105,11 @@ Middleware прикрепляется через `bot.on('message', middleware)`
 - `admin_edit_admin_awaiting_status` — ожидание нового статуса администратора.
 - `admin_edit_admin_awaiting_delete_confirm` — ожидание подтверждения удаления администратора (`ДА`).
 - `admin_edit_admin_awaiting_password` — ожидание нового пароля администратора.
+- `admin_sim_interactions_selecting` — ожидание выбора СИМ в сценарии `/admin_sim_interactions`.
+- `admin_sim_interaction_action_selecting` — ожидание выбора действия для выбранного СИМ.
+- `admin_sim_interaction_awaiting_active_status` — ожидание нового статуса активности СИМ.
+- `admin_sim_interaction_awaiting_condition_status` — ожидание нового статуса исправности СИМ.
+- `admin_sim_interaction_awaiting_delete_confirm` — ожидание подтверждения удаления СИМ (`ДА`).
 
 Поведение:
 
@@ -118,6 +123,11 @@ Middleware прикрепляется через `bot.on('message', middleware)`
   (ввод нового пароля, минимум 6 символов, обновление в БД без разлогина);
 - `/admin_set_warehouse` запускает выбор склада для авторизованного админа: показать список активных складов -> ожидать номер -> при успехе сохранить `admins.warehouse_id` и перевести в `admin_authenticated_with_warehouse`;
 - `/admin_clear_warehouse` доступна только в состоянии с выбранным складом; очищает `admins.warehouse_id` и возвращает в `admin_authenticated`;
+- `/admin_sim_interactions` запускает выбор СИМ выбранного склада (без личного транспорта), далее доступны действия `/admin_sim_change_active`, `/admin_sim_change_status`, `/admin_sim_story`, `/admin_sim_delete` только в рамках выбранного СИМ;
+- `/admin_sim_change_active` и `/admin_sim_change_status` недоступны, если по выбранному СИМ есть активная сессия;
+- при установке статуса исправности `broken` через `/admin_sim_change_status` дополнительно устанавливается `is_active=false`;
+- после выполнения `/admin_sim_story` пользователь автоматически возвращается к выбору команды для выбранного СИМ;
+- удаление через `/admin_sim_delete` требует подтверждения `ДА` и запрещено, если по СИМ есть активная сессия;
 - `/exit_admin` очищает admin-state и возвращает пользователя в курьерский поток
   в зависимости от статуса профиля (зарегистрирован/активен, выбран склад,
   есть ли активная сессия).
@@ -141,6 +151,7 @@ Middleware прикрепляется через `bot.on('message', middleware)`
     выбору действия по выбранному администратору.
 - `/cancel` в `/admin_change_password` возвращает пользователя в `admin_authenticated`.
 - `/cancel` в `/admin_set_warehouse` возвращает пользователя в состояние, из которого был запущен выбор склада.
+- `/cancel` в `/admin_sim_interactions` на этапе выбора СИМ (где бот подсказывает `/cancel - вернуться в состояние выбранного склада`) возвращает в `admin_authenticated_with_warehouse`, а в подэтапах действий/изменений/удаления (где бот подсказывает `/cancel - вернуться к списку СИМ`) возвращает к обновленному списку СИМ.
 ### Важное поведение
 
 - Команды **никогда не мешают**: middleware не прерывает их выполнение.

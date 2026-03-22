@@ -7,6 +7,10 @@ import { WarehouseService } from "../../services/warehouse.service";
 import { WarehouseRepository } from "../../repositories/warehouse.repository";
 import { MobilityDeviceRepository } from "../../repositories/mobility-device.repository";
 import {
+  SessionHistoryByDeviceRecord,
+  SessionRepository,
+} from "../../repositories/session.repository";
+import {
   enterAdminMode,
   exitAdminMode,
   isUserInAdminMode,
@@ -34,12 +38,22 @@ type AdminSessionData = {
   selectedEditAdminId?: number;
   editReturnState?: string;
   addSimWarehouseId?: number;
+  simInteractionWarehouseId?: number;
+  simInteractionDevices?: SimInteractionSessionItem[];
+  selectedSimInteractionDeviceId?: number;
 };
 
 type EditableAdminSessionItem = {
   id: number;
   nickname: string;
   isActive: boolean;
+};
+
+type SimInteractionSessionItem = {
+  id: number;
+  deviceNumber: string;
+  isActive: boolean;
+  status: string;
 };
 
 function escapeMarkdown(text: string): string {
@@ -126,6 +140,7 @@ function getAuthenticatedAdminWelcomeMessage(
         "/admin_set_warehouse",
         "/admin_clear_warehouse",
         "/admin_add_sim",
+        "/admin_sim_interactions",
       ]
     : ["", "Команда выбора склада:", "/admin_set_warehouse"];
 
@@ -159,6 +174,124 @@ function getAuthenticatedAdminWelcomeMessage(
     "/exit_admin",
     "/cancel",
   ].join("\n");
+}
+
+function getSimActiveStatusText(isActive: boolean): string {
+  return isActive ? "Активный" : "Отключен";
+}
+
+function getSimConditionStatusText(status: string): string {
+  if (status === "ok") {
+    return "Исправен";
+  }
+
+  if (status === "warning") {
+    return "Поврежден";
+  }
+
+  if (status === "broken") {
+    return "Сломан";
+  }
+
+  return status;
+}
+
+function parseSimActiveStatusInput(input: string): boolean | null {
+  const normalized = input.trim().toLowerCase().replace(/\s+/g, " ");
+
+  if (
+    normalized === "1" ||
+    normalized === "1." ||
+    normalized === "активный" ||
+    normalized === "1 активный" ||
+    normalized === "1. активный"
+  ) {
+    return true;
+  }
+
+  if (
+    normalized === "2" ||
+    normalized === "2." ||
+    normalized === "отключен" ||
+    normalized === "2 отключен" ||
+    normalized === "2. отключен"
+  ) {
+    return false;
+  }
+
+  return null;
+}
+
+function parseSimConditionStatusInput(input: string): "ok" | "warning" | "broken" | null {
+  const normalized = input.trim().toLowerCase().replace(/\s+/g, " ");
+
+  if (
+    normalized === "1" ||
+    normalized === "1." ||
+    normalized === "исправен" ||
+    normalized === "1 исправен" ||
+    normalized === "1. исправен"
+  ) {
+    return "ok";
+  }
+
+  if (
+    normalized === "2" ||
+    normalized === "2." ||
+    normalized === "поврежден" ||
+    normalized === "2 поврежден" ||
+    normalized === "2. поврежден"
+  ) {
+    return "warning";
+  }
+
+  if (
+    normalized === "3" ||
+    normalized === "3." ||
+    normalized === "сломан" ||
+    normalized === "3 сломан" ||
+    normalized === "3. сломан"
+  ) {
+    return "broken";
+  }
+
+  return null;
+}
+
+function formatMoscowTime(date: Date | null): string {
+  if (!date) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(date));
+}
+
+function formatSimHistoryRows(history: SessionHistoryByDeviceRecord[]): string {
+  return history
+    .map((row, index) => {
+      const start = formatMoscowTime(row.start_date);
+      const end = formatMoscowTime(row.end_date);
+      const simStatus = row.end_date
+        ? getSimConditionStatusText(row.sim_status_after || "-")
+        : "-";
+      const comment = row.end_date
+        ? escapeHtml((row.status_comment || "").trim() || "-")
+        : "-";
+
+      return [
+        `${index + 1}. Начало: <b>${start}</b>`,
+        `Окончание: <b>${end}</b>`,
+        `Курьер: <b>${escapeHtml(row.courier_full_name)}</b>`,
+        `Состояние СИМ после сессии: <b>${escapeHtml(simStatus)}</b>`,
+        `Комментарий: <b>${comment}</b>`,
+      ].join("\n");
+    })
+    .join("\n\n");
 }
 
 async function restoreCourierFlowAfterExitAdmin(
@@ -202,6 +335,7 @@ export function registerAdminModeCommands(
   const adminService = new AdminService();
   const warehouseService = new WarehouseService(new WarehouseRepository());
   const mobilityDeviceRepository = new MobilityDeviceRepository();
+  const sessionRepository = new SessionRepository();
 
   const isInAuthenticatedOrSubflow = (currentState?: string) => {
     return (
@@ -222,7 +356,12 @@ export function registerAdminModeCommands(
       currentState === AdminState.EDIT_ADMIN_AWAITING_STATUS ||
       currentState === AdminState.EDIT_ADMIN_AWAITING_DELETE_CONFIRM ||
       currentState === AdminState.EDIT_ADMIN_AWAITING_PASSWORD ||
-      currentState === AdminState.ADD_SIM_AWAITING_NUMBER
+      currentState === AdminState.ADD_SIM_AWAITING_NUMBER ||
+      currentState === AdminState.SIM_INTERACTIONS_SELECTING ||
+      currentState === AdminState.SIM_INTERACTION_ACTION_SELECTING ||
+      currentState === AdminState.SIM_INTERACTION_AWAITING_ACTIVE_STATUS ||
+      currentState === AdminState.SIM_INTERACTION_AWAITING_CONDITION_STATUS ||
+      currentState === AdminState.SIM_INTERACTION_AWAITING_DELETE_CONFIRM
     );
   };
 
@@ -306,6 +445,131 @@ export function registerAdminModeCommands(
     await bot.sendMessage(
       chatId,
       `Выбран администратор:\n<b>${escapeHtml(admin.nickname)}</b>\nСтатус: <b>${getAdminStatusText(admin.isActive)}</b>\n\nДоступные действия:\n${commandsList}`,
+      { parse_mode: "HTML" },
+    );
+  };
+
+  const loadWarehouseSimDevices = async (
+    warehouseId: number,
+  ): Promise<SimInteractionSessionItem[]> => {
+    const devices =
+      await mobilityDeviceRepository.getDevicesForWarehouseWithoutPersonal(
+        warehouseId,
+      );
+
+    return devices
+      .filter((device) => !!device.device_number)
+      .map((device) => ({
+        id: device.id,
+        deviceNumber: (device.device_number || "").toUpperCase(),
+        isActive: device.is_active,
+        status: device.status,
+      }));
+  };
+
+  const formatSimSelectionList = (devices: SimInteractionSessionItem[]): string => {
+    return devices
+      .map(
+        (device, index) => `${index + 1}. <b>${escapeHtml(device.deviceNumber)}</b>`,
+      )
+      .join("\n");
+  };
+
+  const sendSimSelectionMessage = async (
+    chatId: number,
+    devices: SimInteractionSessionItem[],
+  ) => {
+    await bot.sendMessage(
+      chatId,
+      `Введите номер СИМ:\n\n${formatSimSelectionList(devices)}\n\n/cancel - вернуться в состояние выбранного склада.`,
+      { parse_mode: "HTML" },
+    );
+  };
+
+  const tryResolveSelectedSimDevice = async (
+    telegramId: number,
+    chatId: number,
+  ): Promise<{ tempData: AdminSessionData; device: SimInteractionSessionItem } | null> => {
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    const selectedSimInteractionDeviceId = tempData.selectedSimInteractionDeviceId;
+
+    if (!selectedSimInteractionDeviceId) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора СИМ через /admin_sim_interactions.",
+      );
+      return null;
+    }
+
+    const device = await mobilityDeviceRepository.findById(
+      selectedSimInteractionDeviceId,
+    );
+    if (!device || device.is_personal || !device.device_number) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Выбранный СИМ не найден. Запустите /admin_sim_interactions заново.",
+      );
+      return null;
+    }
+
+    const warehouseId = tempData.simInteractionWarehouseId;
+    if (!warehouseId || device.warehouse_id !== warehouseId) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Выбранный СИМ не относится к текущему складу. Запустите /admin_sim_interactions заново.",
+      );
+      return null;
+    }
+
+    return {
+      tempData,
+      device: {
+        id: device.id,
+        deviceNumber: device.device_number.toUpperCase(),
+        isActive: device.is_active,
+        status: device.status,
+      },
+    };
+  };
+
+  const sendSimActionsMessage = async (
+    chatId: number,
+    device: SimInteractionSessionItem,
+  ) => {
+    const activeSession = await sessionRepository.findActiveByDevice(device.id);
+    const malfunctionComment =
+      device.status === "warning" || device.status === "broken"
+        ? await sessionRepository.getLastMalfunctionCommentByDevice(device.id)
+        : null;
+
+    const activeSessionText = activeSession
+      ? `Да, <b>${escapeHtml(activeSession.courier_full_name)}</b>`
+      : "Нет";
+    const malfunctionText = malfunctionComment
+      ? `<b>${escapeHtml(malfunctionComment)}</b>`
+      : "-";
+    const commandsList = [
+      "/admin_sim_change_active",
+      "/admin_sim_change_status",
+      "/admin_sim_story",
+      "/admin_sim_delete",
+    ].join("\n");
+
+    await bot.sendMessage(
+      chatId,
+      [
+        `Выбран СИМ: <b>${escapeHtml(device.deviceNumber)}</b>`,
+        `Статус активности: <b>${getSimActiveStatusText(device.isActive)}</b>`,
+        `Статус исправности: <b>${getSimConditionStatusText(device.status)}</b>`,
+        `Последнее сообщение о неисправности: ${malfunctionText}`,
+        `Активная сессия: ${activeSessionText}`,
+        "",
+        "Доступные команды:",
+        commandsList,
+        "",
+        "/cancel - вернуться к списку СИМ.",
+      ].join("\n"),
       { parse_mode: "HTML" },
     );
   };
@@ -462,7 +726,12 @@ export function registerAdminModeCommands(
       currentState === AdminState.EDIT_ADMIN_AWAITING_STATUS ||
       currentState === AdminState.EDIT_ADMIN_AWAITING_DELETE_CONFIRM ||
       currentState === AdminState.EDIT_ADMIN_AWAITING_PASSWORD ||
-      currentState === AdminState.ADD_SIM_AWAITING_NUMBER;
+      currentState === AdminState.ADD_SIM_AWAITING_NUMBER ||
+      currentState === AdminState.SIM_INTERACTIONS_SELECTING ||
+      currentState === AdminState.SIM_INTERACTION_ACTION_SELECTING ||
+      currentState === AdminState.SIM_INTERACTION_AWAITING_ACTIVE_STATUS ||
+      currentState === AdminState.SIM_INTERACTION_AWAITING_CONDITION_STATUS ||
+      currentState === AdminState.SIM_INTERACTION_AWAITING_DELETE_CONFIRM;
 
     if (wasAuthenticated && adminId) {
       await adminService.setLoginStatus(adminId, false);
@@ -1177,6 +1446,251 @@ export function registerAdminModeCommands(
     await bot.sendMessage(chatId, "Введите номер СИМ");
   });
 
+  bot.onText(/^\/admin_sim_interactions(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "ℹ️ Сначала войдите в админский режим командой /admin.",
+      );
+      return;
+    }
+
+    const currentState = stateManager.getUserState(telegramId);
+    if (!isInAuthenticatedOrSubflow(currentState)) {
+      await bot.sendMessage(
+        chatId,
+        "🔒 Эта команда доступна только авторизованному администратору. Используйте /admin_login.",
+      );
+      return;
+    }
+
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    if (!tempData.adminId || !tempData.adminPermissionsLevel) {
+      stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+      await bot.sendMessage(
+        chatId,
+        "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
+      );
+      return;
+    }
+
+    const warehouseId = await adminService.getAdminWarehouseId(tempData.adminId);
+    if (warehouseId === undefined) {
+      stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+      await bot.sendMessage(
+        chatId,
+        "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
+      );
+      return;
+    }
+
+    if (warehouseId === null) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда доступна только если выбран склад. Используйте /admin_set_warehouse.",
+      );
+      return;
+    }
+
+    const devices = await loadWarehouseSimDevices(warehouseId);
+    if (!devices.length) {
+      stateManager.setUserState(
+        telegramId,
+        AdminState.AUTHENTICATED_WITH_WAREHOUSE,
+      );
+      stateManager.resetUserTempData(telegramId);
+      stateManager.setUserTempData(telegramId, {
+        adminId: tempData.adminId,
+        adminPermissionsLevel: tempData.adminPermissionsLevel,
+      });
+
+      await bot.sendMessage(
+        chatId,
+        "❌ Список СИМ пуст. Вы возвращены в состояние выбранного склада.",
+      );
+      return;
+    }
+
+    stateManager.setUserState(telegramId, AdminState.SIM_INTERACTIONS_SELECTING);
+    stateManager.setUserTempData(telegramId, {
+      simInteractionWarehouseId: warehouseId,
+      simInteractionDevices: devices,
+      selectedSimInteractionDeviceId: undefined,
+    });
+
+    await sendSimSelectionMessage(chatId, devices);
+  });
+
+  bot.onText(/^\/admin_sim_change_active(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора СИМ через /admin_sim_interactions.",
+      );
+      return;
+    }
+
+    const resolved = await tryResolveSelectedSimDevice(telegramId, chatId);
+    if (!resolved) {
+      return;
+    }
+
+    const hasActiveSession = await sessionRepository.hasActiveByDevice(
+      resolved.device.id,
+    );
+    if (hasActiveSession) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна: по этому СИМ есть активная сессия.",
+      );
+      return;
+    }
+
+    stateManager.setUserState(
+      telegramId,
+      AdminState.SIM_INTERACTION_AWAITING_ACTIVE_STATUS,
+    );
+    await bot.sendMessage(
+      chatId,
+      `СИМ: <b>${escapeHtml(resolved.device.deviceNumber)}</b>\nТекущий статус: <b>${getSimActiveStatusText(resolved.device.isActive)}</b>\n\nВыберите статус:\n1. Активный\n2. Отключен\n\n/cancel - вернуться к списку СИМ.`,
+      { parse_mode: "HTML" },
+    );
+  });
+
+  bot.onText(/^\/admin_sim_change_status(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора СИМ через /admin_sim_interactions.",
+      );
+      return;
+    }
+
+    const resolved = await tryResolveSelectedSimDevice(telegramId, chatId);
+    if (!resolved) {
+      return;
+    }
+
+    const hasActiveSession = await sessionRepository.hasActiveByDevice(
+      resolved.device.id,
+    );
+    if (hasActiveSession) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна: по этому СИМ есть активная сессия.",
+      );
+      return;
+    }
+
+    stateManager.setUserState(
+      telegramId,
+      AdminState.SIM_INTERACTION_AWAITING_CONDITION_STATUS,
+    );
+    await bot.sendMessage(
+      chatId,
+      `СИМ: <b>${escapeHtml(resolved.device.deviceNumber)}</b>\nТекущий статус исправности: <b>${getSimConditionStatusText(resolved.device.status)}</b>\n\nВыберите статус:\n1. Исправен\n2. Поврежден\n3. Сломан\n\n/cancel - вернуться к списку СИМ.`,
+      { parse_mode: "HTML" },
+    );
+  });
+
+  bot.onText(/^\/admin_sim_story(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора СИМ через /admin_sim_interactions.",
+      );
+      return;
+    }
+
+    const resolved = await tryResolveSelectedSimDevice(telegramId, chatId);
+    if (!resolved) {
+      return;
+    }
+
+    const history = await sessionRepository.getHistoryByDevice(resolved.device.id);
+    stateManager.setUserState(
+      telegramId,
+      AdminState.SIM_INTERACTION_ACTION_SELECTING,
+    );
+
+    if (!history.length) {
+      await bot.sendMessage(
+        chatId,
+        `История сессий для СИМ <b>${escapeHtml(resolved.device.deviceNumber)}</b> пуста.`,
+        { parse_mode: "HTML" },
+      );
+      await sendSimActionsMessage(chatId, resolved.device);
+      return;
+    }
+
+    await bot.sendMessage(
+      chatId,
+      `История сессий СИМ <b>${escapeHtml(resolved.device.deviceNumber)}</b>:\n\n${formatSimHistoryRows(history)}`,
+      { parse_mode: "HTML" },
+    );
+    await sendSimActionsMessage(chatId, resolved.device);
+  });
+
+  bot.onText(/^\/admin_sim_delete(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора СИМ через /admin_sim_interactions.",
+      );
+      return;
+    }
+
+    const resolved = await tryResolveSelectedSimDevice(telegramId, chatId);
+    if (!resolved) {
+      return;
+    }
+
+    stateManager.setUserState(
+      telegramId,
+      AdminState.SIM_INTERACTION_AWAITING_DELETE_CONFIRM,
+    );
+    await bot.sendMessage(
+      chatId,
+      "Вы уверены, что хотите удалить СИМ? Введите ДА\n\n/cancel - вернуться к списку СИМ.",
+    );
+  });
+
   bot.on("message", async (msg) => {
     const chatId = msg.chat.id;
     const telegramId = msg.from?.id;
@@ -1205,7 +1719,12 @@ export function registerAdminModeCommands(
       currentState !== AdminState.EDIT_ADMIN_AWAITING_STATUS &&
       currentState !== AdminState.EDIT_ADMIN_AWAITING_DELETE_CONFIRM &&
       currentState !== AdminState.EDIT_ADMIN_AWAITING_PASSWORD &&
-      currentState !== AdminState.ADD_SIM_AWAITING_NUMBER
+      currentState !== AdminState.ADD_SIM_AWAITING_NUMBER &&
+      currentState !== AdminState.SIM_INTERACTIONS_SELECTING &&
+      currentState !== AdminState.SIM_INTERACTION_ACTION_SELECTING &&
+      currentState !== AdminState.SIM_INTERACTION_AWAITING_ACTIVE_STATUS &&
+      currentState !== AdminState.SIM_INTERACTION_AWAITING_CONDITION_STATUS &&
+      currentState !== AdminState.SIM_INTERACTION_AWAITING_DELETE_CONFIRM
     ) {
       return;
     }
@@ -2124,6 +2643,342 @@ export function registerAdminModeCommands(
         chatId,
         getAuthenticatedAdminWelcomeMessage(adminPermissionsLevel, true),
       );
+      return;
+    }
+
+    if (currentState === AdminState.SIM_INTERACTIONS_SELECTING) {
+      const tempData =
+        stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const devices = tempData.simInteractionDevices;
+
+      if (!devices?.length) {
+        stateManager.setUserState(
+          telegramId,
+          AdminState.AUTHENTICATED_WITH_WAREHOUSE,
+        );
+        stateManager.resetUserTempData(telegramId);
+        if (tempData.adminId && tempData.adminPermissionsLevel) {
+          stateManager.setUserTempData(telegramId, {
+            adminId: tempData.adminId,
+            adminPermissionsLevel: tempData.adminPermissionsLevel,
+          });
+        }
+
+        await bot.sendMessage(
+          chatId,
+          "❌ Что-то пошло не так. Запустите /admin_sim_interactions заново.",
+        );
+        return;
+      }
+
+      const input = text.trim();
+      let selectedDevice: SimInteractionSessionItem | undefined;
+
+      if (/^\d+$/.test(input)) {
+        const index = parseInt(input, 10) - 1;
+        if (index >= 0 && index < devices.length) {
+          selectedDevice = devices[index];
+        }
+      } else {
+        const normalizedNumber = input.toUpperCase();
+        selectedDevice = devices.find(
+          (device) => device.deviceNumber.toUpperCase() === normalizedNumber,
+        );
+      }
+
+      if (!selectedDevice) {
+        await bot.sendMessage(
+          chatId,
+          "❌ СИМ не найден. Введите порядковый номер из списка или номер СИМ.",
+        );
+        return;
+      }
+
+      stateManager.setUserState(
+        telegramId,
+        AdminState.SIM_INTERACTION_ACTION_SELECTING,
+      );
+      stateManager.setUserTempData(telegramId, {
+        selectedSimInteractionDeviceId: selectedDevice.id,
+      });
+
+      await sendSimActionsMessage(chatId, selectedDevice);
+      return;
+    }
+
+    if (currentState === AdminState.SIM_INTERACTION_ACTION_SELECTING) {
+      await bot.sendMessage(
+        chatId,
+        "ℹ️ Выберите действие командой: /admin_sim_change_active, /admin_sim_change_status, /admin_sim_story или /admin_sim_delete.\n\n/cancel - вернуться к списку СИМ.",
+      );
+      return;
+    }
+
+    if (currentState === AdminState.SIM_INTERACTION_AWAITING_ACTIVE_STATUS) {
+      const nextStatus = parseSimActiveStatusInput(text);
+      if (nextStatus === null) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Некорректный выбор статуса. Введите 1 (Активный) или 2 (Отключен).",
+        );
+        return;
+      }
+
+      const resolved = await tryResolveSelectedSimDevice(telegramId, chatId);
+      if (!resolved) {
+        return;
+      }
+
+      const hasActiveSession = await sessionRepository.hasActiveByDevice(
+        resolved.device.id,
+      );
+      if (hasActiveSession) {
+        stateManager.setUserState(
+          telegramId,
+          AdminState.SIM_INTERACTION_ACTION_SELECTING,
+        );
+        await bot.sendMessage(
+          chatId,
+          "❌ Невозможно изменить статус активности: по СИМ есть активная сессия.",
+        );
+        await sendSimActionsMessage(chatId, resolved.device);
+        return;
+      }
+
+      const updated = await mobilityDeviceRepository.updateActiveById(
+        resolved.device.id,
+        nextStatus,
+      );
+      if (!updated) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Не удалось изменить статус активности СИМ.",
+        );
+        return;
+      }
+
+      const refreshed = await mobilityDeviceRepository.findById(resolved.device.id);
+      if (!refreshed || !refreshed.device_number) {
+        await bot.sendMessage(
+          chatId,
+          "❌ СИМ не найден. Запустите /admin_sim_interactions заново.",
+        );
+        return;
+      }
+
+      const refreshedDevice: SimInteractionSessionItem = {
+        id: refreshed.id,
+        deviceNumber: refreshed.device_number.toUpperCase(),
+        isActive: refreshed.is_active,
+        status: refreshed.status,
+      };
+      const tempData =
+        stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const updatedList = (tempData.simInteractionDevices || []).map((device) =>
+        device.id === refreshedDevice.id ? refreshedDevice : device,
+      );
+
+      stateManager.setUserState(
+        telegramId,
+        AdminState.SIM_INTERACTION_ACTION_SELECTING,
+      );
+      stateManager.setUserTempData(telegramId, {
+        simInteractionDevices: updatedList,
+      });
+
+      await bot.sendMessage(
+        chatId,
+        `✅ Статус активности СИМ изменен на <b>${getSimActiveStatusText(refreshedDevice.isActive)}</b>.`,
+        { parse_mode: "HTML" },
+      );
+      await sendSimActionsMessage(chatId, refreshedDevice);
+      return;
+    }
+
+    if (currentState === AdminState.SIM_INTERACTION_AWAITING_CONDITION_STATUS) {
+      const nextStatus = parseSimConditionStatusInput(text);
+      if (nextStatus === null) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Некорректный выбор статуса. Введите 1 (Исправен), 2 (Поврежден) или 3 (Сломан).",
+        );
+        return;
+      }
+
+      const resolved = await tryResolveSelectedSimDevice(telegramId, chatId);
+      if (!resolved) {
+        return;
+      }
+
+      const hasActiveSession = await sessionRepository.hasActiveByDevice(
+        resolved.device.id,
+      );
+      if (hasActiveSession) {
+        stateManager.setUserState(
+          telegramId,
+          AdminState.SIM_INTERACTION_ACTION_SELECTING,
+        );
+        await bot.sendMessage(
+          chatId,
+          "❌ Невозможно изменить статус исправности: по СИМ есть активная сессия.",
+        );
+        await sendSimActionsMessage(chatId, resolved.device);
+        return;
+      }
+
+      const updated = await mobilityDeviceRepository.updateConditionStatusById(
+        resolved.device.id,
+        nextStatus,
+      );
+      if (!updated) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Не удалось изменить статус исправности СИМ.",
+        );
+        return;
+      }
+
+      if (nextStatus === "broken") {
+        const deactivated = await mobilityDeviceRepository.updateActiveById(
+          resolved.device.id,
+          false,
+        );
+        if (!deactivated) {
+          await bot.sendMessage(
+            chatId,
+            "❌ Не удалось отключить СИМ после установки статуса Сломан.",
+          );
+          return;
+        }
+      }
+
+      const refreshed = await mobilityDeviceRepository.findById(resolved.device.id);
+      if (!refreshed || !refreshed.device_number) {
+        await bot.sendMessage(
+          chatId,
+          "❌ СИМ не найден. Запустите /admin_sim_interactions заново.",
+        );
+        return;
+      }
+
+      const refreshedDevice: SimInteractionSessionItem = {
+        id: refreshed.id,
+        deviceNumber: refreshed.device_number.toUpperCase(),
+        isActive: refreshed.is_active,
+        status: refreshed.status,
+      };
+      const tempData =
+        stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const updatedList = (tempData.simInteractionDevices || []).map((device) =>
+        device.id === refreshedDevice.id ? refreshedDevice : device,
+      );
+
+      stateManager.setUserState(
+        telegramId,
+        AdminState.SIM_INTERACTION_ACTION_SELECTING,
+      );
+      stateManager.setUserTempData(telegramId, {
+        simInteractionDevices: updatedList,
+      });
+
+      await bot.sendMessage(
+        chatId,
+        `✅ Статус исправности СИМ изменен на <b>${getSimConditionStatusText(refreshedDevice.status)}</b>.`,
+        { parse_mode: "HTML" },
+      );
+      await sendSimActionsMessage(chatId, refreshedDevice);
+      return;
+    }
+
+    if (currentState === AdminState.SIM_INTERACTION_AWAITING_DELETE_CONFIRM) {
+      if (text.trim() !== "ДА") {
+        await bot.sendMessage(
+          chatId,
+          "❌ Для удаления СИМ введите строго ДА.",
+        );
+        return;
+      }
+
+      const resolved = await tryResolveSelectedSimDevice(telegramId, chatId);
+      if (!resolved) {
+        return;
+      }
+
+      const hasActiveSession = await sessionRepository.hasActiveByDevice(
+        resolved.device.id,
+      );
+      if (hasActiveSession) {
+        stateManager.setUserState(
+          telegramId,
+          AdminState.SIM_INTERACTION_ACTION_SELECTING,
+        );
+        await bot.sendMessage(
+          chatId,
+          "❌ Невозможно удалить СИМ, пока по нему есть активная сессия.",
+        );
+        await sendSimActionsMessage(chatId, resolved.device);
+        return;
+      }
+
+      const deleted = await mobilityDeviceRepository.deleteById(resolved.device.id);
+      if (!deleted) {
+        await bot.sendMessage(chatId, "❌ Не удалось удалить СИМ.");
+        return;
+      }
+
+      const tempData =
+        stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const warehouseId = tempData.simInteractionWarehouseId;
+
+      if (!warehouseId) {
+        stateManager.setUserState(
+          telegramId,
+          AdminState.AUTHENTICATED_WITH_WAREHOUSE,
+        );
+        stateManager.resetUserTempData(telegramId);
+        if (tempData.adminId && tempData.adminPermissionsLevel) {
+          stateManager.setUserTempData(telegramId, {
+            adminId: tempData.adminId,
+            adminPermissionsLevel: tempData.adminPermissionsLevel,
+          });
+        }
+
+        await bot.sendMessage(
+          chatId,
+          "✅ СИМ удален. Контекст выбора СИМ сброшен.",
+        );
+        return;
+      }
+
+      const refreshedDevices = await loadWarehouseSimDevices(warehouseId);
+      if (!refreshedDevices.length) {
+        stateManager.setUserState(
+          telegramId,
+          AdminState.AUTHENTICATED_WITH_WAREHOUSE,
+        );
+        stateManager.resetUserTempData(telegramId);
+        if (tempData.adminId && tempData.adminPermissionsLevel) {
+          stateManager.setUserTempData(telegramId, {
+            adminId: tempData.adminId,
+            adminPermissionsLevel: tempData.adminPermissionsLevel,
+          });
+        }
+
+        await bot.sendMessage(
+          chatId,
+          "✅ СИМ удален. Список СИМ пуст, вы возвращены в состояние выбранного склада.",
+        );
+        return;
+      }
+
+      stateManager.setUserState(telegramId, AdminState.SIM_INTERACTIONS_SELECTING);
+      stateManager.setUserTempData(telegramId, {
+        simInteractionDevices: refreshedDevices,
+        selectedSimInteractionDeviceId: undefined,
+      });
+
+      await bot.sendMessage(chatId, "✅ СИМ успешно удален.");
+      await sendSimSelectionMessage(chatId, refreshedDevices);
       return;
     }
 

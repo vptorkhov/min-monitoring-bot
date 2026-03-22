@@ -3,6 +3,7 @@ import { RegistrationHandler } from '../handlers/registration.handler';
 import { CourierService } from '../../services/courier.service';
 import { SessionService } from '../../services/session.service';
 import { AdminService } from '../../services/admin.service';
+import { MobilityDeviceRepository } from '../../repositories/mobility-device.repository';
 import {
     stateManager
 } from '../state-manager';
@@ -26,6 +27,7 @@ export function registerCancelCommand(
     sessionService: SessionService
 ) {
     const adminService = new AdminService();
+    const mobilityDeviceRepository = new MobilityDeviceRepository();
 
     const formatEditableAdminsList = (admins: { nickname: string }[]): string => {
         return admins
@@ -289,6 +291,95 @@ export function registerCancelCommand(
             }
 
             await bot.sendMessage(chatId, '❌ Добавление СИМ отменено. Вы возвращены в авторизованный админ-режим.');
+            return;
+        }
+
+        const isSimInteractionsSelectingState = currentState === AdminState.SIM_INTERACTIONS_SELECTING;
+        if (isSimInteractionsSelectingState) {
+            const tempData = stateManager.getUserTempData<{
+                adminId?: number;
+                adminPermissionsLevel?: number;
+            }>(userId);
+
+            const adminId = tempData?.adminId;
+            const adminPermissionsLevel = tempData?.adminPermissionsLevel;
+
+            stateManager.setUserState(userId, AdminState.AUTHENTICATED_WITH_WAREHOUSE);
+            stateManager.resetUserTempData(userId);
+            if (adminId && adminPermissionsLevel) {
+                stateManager.setUserTempData(userId, { adminId, adminPermissionsLevel });
+            }
+
+            await bot.sendMessage(chatId, '❌ Взаимодействие с СИМ отменено. Вы возвращены в состояние выбранного склада.');
+            return;
+        }
+
+        const isSimInteractionSubflowState = currentState === AdminState.SIM_INTERACTION_ACTION_SELECTING
+            || currentState === AdminState.SIM_INTERACTION_AWAITING_ACTIVE_STATUS
+            || currentState === AdminState.SIM_INTERACTION_AWAITING_CONDITION_STATUS
+            || currentState === AdminState.SIM_INTERACTION_AWAITING_DELETE_CONFIRM;
+        if (isSimInteractionSubflowState) {
+            const tempData = stateManager.getUserTempData<{
+                adminId?: number;
+                adminPermissionsLevel?: number;
+                simInteractionWarehouseId?: number;
+            }>(userId);
+
+            const warehouseId = tempData?.simInteractionWarehouseId;
+            if (!warehouseId) {
+                stateManager.setUserState(userId, AdminState.AUTHENTICATED_WITH_WAREHOUSE);
+                stateManager.resetUserTempData(userId);
+                if (tempData?.adminId && tempData?.adminPermissionsLevel) {
+                    stateManager.setUserTempData(userId, {
+                        adminId: tempData.adminId,
+                        adminPermissionsLevel: tempData.adminPermissionsLevel
+                    });
+                }
+
+                await bot.sendMessage(chatId, '❌ Действие отменено. Контекст выбора СИМ сброшен, вы возвращены в состояние выбранного склада.');
+                return;
+            }
+
+            const refreshedDevices = (await mobilityDeviceRepository.getDevicesForWarehouseWithoutPersonal(warehouseId))
+                .filter((device) => !!device.device_number)
+                .map((device) => ({
+                    id: device.id,
+                    deviceNumber: (device.device_number || '').toUpperCase(),
+                    isActive: device.is_active,
+                    status: device.status
+                }));
+
+            if (!refreshedDevices.length) {
+                stateManager.setUserState(userId, AdminState.AUTHENTICATED_WITH_WAREHOUSE);
+                stateManager.resetUserTempData(userId);
+                if (tempData?.adminId && tempData?.adminPermissionsLevel) {
+                    stateManager.setUserTempData(userId, {
+                        adminId: tempData.adminId,
+                        adminPermissionsLevel: tempData.adminPermissionsLevel
+                    });
+                }
+
+                await bot.sendMessage(chatId, '❌ Действие отменено. Список СИМ пуст, вы возвращены в состояние выбранного склада.');
+                return;
+            }
+
+            stateManager.setUserState(userId, AdminState.SIM_INTERACTIONS_SELECTING);
+            stateManager.resetUserTempData(userId);
+            stateManager.setUserTempData(userId, {
+                adminId: tempData?.adminId,
+                adminPermissionsLevel: tempData?.adminPermissionsLevel,
+                simInteractionWarehouseId: warehouseId,
+                simInteractionDevices: refreshedDevices,
+                selectedSimInteractionDeviceId: undefined
+            });
+
+            const simList = refreshedDevices
+                .map((device, index) => `${index + 1}. ${device.deviceNumber}`)
+                .join('\n');
+            await bot.sendMessage(
+                chatId,
+                `❌ Действие отменено. Вы возвращены к списку СИМ.\n\nВведите номер СИМ:\n\n${simList}`
+            );
             return;
         }
 
