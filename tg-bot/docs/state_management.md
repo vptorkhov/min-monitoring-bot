@@ -82,6 +82,65 @@ Middleware прикрепляется через `bot.on('message', middleware)`
 `registrationHandler.handleMessage(msg)`; иначе он ничего не делает –
 следующие подписчики на `message` могут обрабатывать событие.
 
+Дополнительно в проекте используется группа admin-state:
+
+- `admin_guest_mode` — неавторизованный админский режим;
+- `admin_register_awaiting_login` — ожидание логина в `/admin_register`;
+- `admin_register_awaiting_password` — ожидание пароля в `/admin_register`;
+- `admin_login_awaiting_login` — ожидание логина в `/admin_login`;
+- `admin_login_awaiting_password` — ожидание пароля в `/admin_login`;
+- `admin_authenticated` — авторизованный админский режим.
+- `admin_authenticated_with_warehouse` — авторизованный админский режим с выбранным складом (`admins.warehouse_id IS NOT NULL`).
+- `admin_change_password_awaiting_new` — ожидание нового пароля в `/admin_change_password`.
+- `admin_set_warehouse_selecting` — ожидание номера склада в сценарии `/admin_set_warehouse`.
+- `admin_create_warehouse_awaiting_name` / `admin_create_warehouse_awaiting_address` — шаги создания склада.
+- `admin_edit_warehouses_selecting` — ожидание номера склада в сценарии `/superadmin_edit_warehouses`.
+- `admin_edit_warehouse_action_selecting` — ожидание выбора действия для выбранного склада.
+- `admin_edit_warehouse_awaiting_name` — ожидание нового названия склада.
+- `admin_edit_warehouse_awaiting_address` — ожидание нового адреса склада.
+- `admin_edit_warehouse_awaiting_status` — ожидание нового статуса склада.
+- `admin_edit_warehouse_awaiting_delete_confirm` — ожидание подтверждения удаления склада (`ДА`).
+- `admin_edit_admins_selecting` — ожидание номера администратора в сценарии `/superadmin_edit_admins`.
+- `admin_edit_admin_action_selecting` — ожидание выбора действия для выбранного администратора.
+- `admin_edit_admin_awaiting_status` — ожидание нового статуса администратора.
+- `admin_edit_admin_awaiting_delete_confirm` — ожидание подтверждения удаления администратора (`ДА`).
+- `admin_edit_admin_awaiting_password` — ожидание нового пароля администратора.
+
+Поведение:
+
+- при вводе `/admin` текущее состояние и `tempData` пользователя очищаются;
+- пользователь переходит в неавторизованный админский режим;
+- в этом режиме блокируются курьерские команды, кроме `/admin_login`, `/admin_register`, `/admin_logout`, `/exit_admin`, `/cancel`;
+- `/admin_login` запускает пошаговый сценарий входа админа (логин -> пароль -> `admin_authenticated` или `admin_authenticated_with_warehouse`, если у админа уже есть выбранный склад в БД);
+- `/admin_register` запускает пошаговый сценарий регистрации админа (логин -> пароль -> запись в БД);
+- `/admin_logout` завершает авторизованную сессию админа и возвращает в `admin_guest_mode`;
+- `/admin_change_password` запускает смену пароля для авторизованного админа/суперадмина
+  (ввод нового пароля, минимум 6 символов, обновление в БД без разлогина);
+- `/admin_set_warehouse` запускает выбор склада для авторизованного админа: показать список активных складов -> ожидать номер -> при успехе сохранить `admins.warehouse_id` и перевести в `admin_authenticated_with_warehouse`;
+- `/admin_clear_warehouse` доступна только в состоянии с выбранным складом; очищает `admins.warehouse_id` и возвращает в `admin_authenticated`;
+- `/exit_admin` очищает admin-state и возвращает пользователя в курьерский поток
+  в зависимости от статуса профиля (зарегистрирован/активен, выбран склад,
+  есть ли активная сессия).
+- `/superadmin_edit_warehouses` запускает многошаговый сценарий редактирования склада
+  (выбор склада -> выбор действия -> ввод значения/подтверждение), доступный только
+  для суперадмина (`permissions_level >= 2`).
+- `/superadmin_edit_admins` запускает многошаговый сценарий редактирования администратора
+  (выбор администратора -> выбор действия -> ввод значения/подтверждение), доступный
+  только для суперадмина (`permissions_level >= 2`); в список попадают только админы
+  с `permissions_level < 2`.
+- `/cancel` в этом сценарии работает контекстно:
+  - на этапе выбора склада или выбора действия возвращает в состояние до запуска
+    `/superadmin_edit_warehouses`;
+  - на этапах ввода названия/адреса/статуса/подтверждения удаления возвращает к
+    выбору действия по выбранному складу.
+- `/cancel` в сценарии `/superadmin_edit_admins` работает контекстно:
+  - на этапе выбора администратора возвращает в состояние до запуска
+    `/superadmin_edit_admins`;
+  - на этапе выбора действия возвращает к списку администраторов;
+  - на этапах ввода статуса/подтверждения удаления/нового пароля возвращает к
+    выбору действия по выбранному администратору.
+- `/cancel` в `/admin_change_password` возвращает пользователя в `admin_authenticated`.
+- `/cancel` в `/admin_set_warehouse` возвращает пользователя в состояние, из которого был запущен выбор склада.
 ### Важное поведение
 
 - Команды **никогда не мешают**: middleware не прерывает их выполнение.

@@ -28,3 +28,32 @@ export const DeviceSessionState = {
 
 // Тип для состояний сессии устройства
 export type DeviceSessionStateType = typeof DeviceSessionState[keyof typeof DeviceSessionState];
+
+// Состояния админ-режима
+export const AdminState = {
+    GUEST_MODE: 'admin_guest_mode',
+    REGISTER_AWAITING_LOGIN: 'admin_register_awaiting_login',
+    REGISTER_AWAITING_PASSWORD: 'admin_register_awaiting_password',
+    LOGIN_AWAITING_LOGIN: 'admin_login_awaiting_login',
+    LOGIN_AWAITING_PASSWORD: 'admin_login_awaiting_password',
+    AUTHENTICATED: 'admin_authenticated',
+    AUTHENTICATED_WITH_WAREHOUSE: 'admin_authenticated_with_warehouse',
+    CHANGE_PASSWORD_AWAITING_NEW: 'admin_change_password_awaiting_new',
+    SET_WAREHOUSE_SELECTING: 'admin_set_warehouse_selecting',
+    CREATE_WAREHOUSE_AWAITING_NAME: 'admin_create_warehouse_awaiting_name',
+    CREATE_WAREHOUSE_AWAITING_ADDRESS: 'admin_create_warehouse_awaiting_address',
+    EDIT_WAREHOUSES_SELECTING: 'admin_edit_warehouses_selecting',
+    EDIT_WAREHOUSE_ACTION_SELECTING: 'admin_edit_warehouse_action_selecting',
+    EDIT_WAREHOUSE_AWAITING_NAME: 'admin_edit_warehouse_awaiting_name',
+    EDIT_WAREHOUSE_AWAITING_ADDRESS: 'admin_edit_warehouse_awaiting_address',
+    EDIT_WAREHOUSE_AWAITING_STATUS: 'admin_edit_warehouse_awaiting_status',
+    EDIT_WAREHOUSE_AWAITING_DELETE_CONFIRM: 'admin_edit_warehouse_awaiting_delete_confirm',
+    EDIT_ADMINS_SELECTING: 'admin_edit_admins_selecting',
+    EDIT_ADMIN_ACTION_SELECTING: 'admin_edit_admin_action_selecting',
+    EDIT_ADMIN_AWAITING_STATUS: 'admin_edit_admin_awaiting_status',
+    EDIT_ADMIN_AWAITING_DELETE_CONFIRM: 'admin_edit_admin_awaiting_delete_confirm',
+    EDIT_ADMIN_AWAITING_PASSWORD: 'admin_edit_admin_awaiting_password'
+} as const;
+
+// Тип для состояний админ-режима
+export type AdminStateType = typeof AdminState[keyof typeof AdminState];

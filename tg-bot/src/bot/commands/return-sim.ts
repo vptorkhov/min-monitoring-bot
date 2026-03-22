@@ -17,6 +17,7 @@ import {
 import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
 import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
 import { INLINE_CALLBACK_DATA } from '../keyboards';
+import { blockIfAdminGuestCommandNotAllowed } from '../admin/admin-mode';
 
 const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
     remove_keyboard: true
@@ -163,6 +164,10 @@ export function registerReturnSimCommand(
         const telegramId = msg.from?.id;
         if (!telegramId) return;
 
+        if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, telegramId, msg.text)) {
+            return;
+        }
+
         await startReturnSimFlow(chatId, telegramId);
     });
 
@@ -181,6 +186,17 @@ export function registerReturnSimCommand(
         const telegramId = query.from.id;
         if (!chatId) {
             return false;
+        }
+
+        if (
+            callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_NO ||
+            callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_YES ||
+            callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_WEAK ||
+            callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_CRITICAL
+        ) {
+            if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, telegramId, '/return_sim')) {
+                return true;
+            }
         }
 
         const state = stateManager.getUserState(telegramId);
@@ -223,6 +239,10 @@ export function registerReturnSimCommand(
 
         const textAsCommand = convertKeyboardButtonToCommand(msg.text || '');
         if (textAsCommand === '/return_sim' && (msg.text || '') !== '/return_sim') {
+            if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, telegramId, msg.text)) {
+                return;
+            }
+
             await startReturnSimFlow(chatId, telegramId);
             return;
         }

@@ -15,6 +15,7 @@ import {
     getTakeSimNumberSelectionKeyboard
 } from '../keyboards';
 import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
+import { blockIfAdminGuestCommandNotAllowed } from '../admin/admin-mode';
 
 const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = { remove_keyboard: true };
 
@@ -123,6 +124,10 @@ export function registerTakeSimCommand(
         const telegramId = msg.from?.id;
         if (!telegramId) return;
 
+        if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, telegramId, msg.text)) {
+            return;
+        }
+
         await startTakeSimFlow(chatId, telegramId);
     });
 
@@ -140,6 +145,10 @@ export function registerTakeSimCommand(
         }
 
         if (callbackData === INLINE_CALLBACK_DATA.TAKE_SIM) {
+            if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, telegramId, '/take_sim')) {
+                return true;
+            }
+
             await startTakeSimFlow(chatId, telegramId);
             return true;
         }
@@ -168,6 +177,10 @@ export function registerTakeSimCommand(
         const text = msg.text?.trim();
         const textAsCommand = text ? convertKeyboardButtonToCommand(text) : '';
         if (textAsCommand === '/take_sim' && text !== '/take_sim') {
+            if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, telegramId, text)) {
+                return;
+            }
+
             await startTakeSimFlow(chatId, telegramId);
             return;
         }

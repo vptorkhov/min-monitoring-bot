@@ -15,6 +15,7 @@ import { MobilityDeviceRepository } from '../../repositories/mobility-device.rep
 import { registerTakeSimCommand } from './take-sim';
 import { registerReturnSimCommand } from './return-sim';
 import { createCallbackRouter } from '../callback-router';
+import { registerAdminModeCommands } from './admin';
 
 /**
  * Регистрация всех команд бота
@@ -50,6 +51,9 @@ export function registerAllCommands(
     // Регистрируем команды для работы с СИМ
     registerTakeSimCommand(bot, courierService, sessionService, deviceRepository, callbackRouter.registerHandler);
     registerReturnSimCommand(bot, courierService, sessionService, callbackRouter.registerHandler);
+
+    // Регистрируем скрытый админ-режим
+    registerAdminModeCommands(bot, courierService, registrationHandler, sessionService);
 
     console.log('✅ Команды бота зарегистрированы');
 
