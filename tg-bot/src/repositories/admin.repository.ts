@@ -74,6 +74,15 @@ export class AdminRepository {
         return (result.rowCount ?? 0) > 0;
     }
 
+    async updateWarehouse(adminId: number, warehouseId: number | null): Promise<boolean> {
+        const result = await this.db.query(
+            'UPDATE admins SET warehouse_id = $2 WHERE id = $1',
+            [adminId, warehouseId]
+        );
+
+        return (result.rowCount ?? 0) > 0;
+    }
+
     async getEditableAdmins(): Promise<EditableAdminFromDB[]> {
         const result = await this.db.query<EditableAdminFromDB>(
             `SELECT id, nickname, permissions_level, is_active

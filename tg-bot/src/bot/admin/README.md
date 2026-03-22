@@ -27,8 +27,10 @@
 Реализованные сценарии:
 
 - `/admin_register` — пошаговая регистрация админа (логин -> пароль -> создание неактивной записи)
-- `/admin_login` — пошаговый вход админа (логин -> пароль -> переход в `admin_authenticated`)
-- `/admin_change_password` — смена пароля для авторизованного админа/суперадмина; шаг: ввод нового пароля (мин. 6 символов) -> обновление пароля в БД -> возврат в `admin_authenticated` без разлогина
+- `/admin_login` — пошаговый вход админа (логин -> пароль -> переход в `admin_authenticated` или `admin_authenticated_with_warehouse`, если у админа уже выбран склад в БД)
+- `/admin_change_password` — смена пароля для авторизованного админа/суперадмина; шаг: ввод нового пароля (мин. 6 символов) -> обновление пароля в БД -> возврат в авторизованное состояние без разлогина
+- `/admin_set_warehouse` — выбор склада для админа; доступно любому авторизованному админу; шаги: показать список активных складов → ввод номера склада → сохранение `admins.warehouse_id`; при невалидном номере бот продолжает ожидать корректный ввод; команда доступна как при невыбранном, так и при уже выбранном складе (для смены склада)
+- `/admin_clear_warehouse` — отвязка админа от склада; доступно только если склад уже выбран (`admins.warehouse_id IS NOT NULL`); после успеха бот очищает связь и возвращает админа в состояние без выбранного склада
 - `/admin_logout` — выход из авторизованного админского состояния в `admin_guest_mode`
 - `/exit_admin` — полный выход из админского режима в курьерский поток
 - `/superadmin_create_warehouse` — создание нового склада; доступно только суперадмину (`permissions_level >= 2`); шаги: название (мин. 2 символа) → адрес (мин. 2 символа) → создание записи в БД; доступна как с выбранным складом, так и без него
@@ -59,6 +61,10 @@
 
 - на этапе ввода нового пароля (`/admin_change_password`) — возврат в `admin_authenticated` без разлогина
 
+Поведение `/cancel` в выборе склада админа:
+
+- на этапе ввода номера склада (`/admin_set_warehouse`) — возврат в состояние, из которого была запущена команда
+
 ## Состояния admin_mode_states
 
 Все состояния, при которых `isUserInAdminMode()` возвращает `true`:
@@ -67,7 +73,9 @@
 - `admin_register_awaiting_login` / `admin_register_awaiting_password` — шаги регистрации
 - `admin_login_awaiting_login` / `admin_login_awaiting_password` — шаги входа
 - `admin_authenticated` — авторизованный режим
+- `admin_authenticated_with_warehouse` — авторизованный режим с выбранным складом
 - `admin_change_password_awaiting_new` — ожидание нового пароля в сценарии `/admin_change_password`
+- `admin_set_warehouse_selecting` — ожидание номера склада в сценарии `/admin_set_warehouse`
 - `admin_create_warehouse_awaiting_name` / `admin_create_warehouse_awaiting_address` — шаги создания склада
 - `admin_edit_warehouses_selecting` — ожидание номера склада для редактирования
 - `admin_edit_warehouse_action_selecting` — ожидание выбора действия по выбранному складу

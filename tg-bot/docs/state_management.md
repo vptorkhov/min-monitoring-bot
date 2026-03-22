@@ -90,7 +90,9 @@ Middleware прикрепляется через `bot.on('message', middleware)`
 - `admin_login_awaiting_login` — ожидание логина в `/admin_login`;
 - `admin_login_awaiting_password` — ожидание пароля в `/admin_login`;
 - `admin_authenticated` — авторизованный админский режим.
+- `admin_authenticated_with_warehouse` — авторизованный админский режим с выбранным складом (`admins.warehouse_id IS NOT NULL`).
 - `admin_change_password_awaiting_new` — ожидание нового пароля в `/admin_change_password`.
+- `admin_set_warehouse_selecting` — ожидание номера склада в сценарии `/admin_set_warehouse`.
 - `admin_create_warehouse_awaiting_name` / `admin_create_warehouse_awaiting_address` — шаги создания склада.
 - `admin_edit_warehouses_selecting` — ожидание номера склада в сценарии `/superadmin_edit_warehouses`.
 - `admin_edit_warehouse_action_selecting` — ожидание выбора действия для выбранного склада.
@@ -109,11 +111,13 @@ Middleware прикрепляется через `bot.on('message', middleware)`
 - при вводе `/admin` текущее состояние и `tempData` пользователя очищаются;
 - пользователь переходит в неавторизованный админский режим;
 - в этом режиме блокируются курьерские команды, кроме `/admin_login`, `/admin_register`, `/admin_logout`, `/exit_admin`, `/cancel`;
-- `/admin_login` запускает пошаговый сценарий входа админа (логин -> пароль -> `admin_authenticated`);
+- `/admin_login` запускает пошаговый сценарий входа админа (логин -> пароль -> `admin_authenticated` или `admin_authenticated_with_warehouse`, если у админа уже есть выбранный склад в БД);
 - `/admin_register` запускает пошаговый сценарий регистрации админа (логин -> пароль -> запись в БД);
 - `/admin_logout` завершает авторизованную сессию админа и возвращает в `admin_guest_mode`;
 - `/admin_change_password` запускает смену пароля для авторизованного админа/суперадмина
   (ввод нового пароля, минимум 6 символов, обновление в БД без разлогина);
+- `/admin_set_warehouse` запускает выбор склада для авторизованного админа: показать список активных складов -> ожидать номер -> при успехе сохранить `admins.warehouse_id` и перевести в `admin_authenticated_with_warehouse`;
+- `/admin_clear_warehouse` доступна только в состоянии с выбранным складом; очищает `admins.warehouse_id` и возвращает в `admin_authenticated`;
 - `/exit_admin` очищает admin-state и возвращает пользователя в курьерский поток
   в зависимости от статуса профиля (зарегистрирован/активен, выбран склад,
   есть ли активная сессия).
@@ -136,6 +140,7 @@ Middleware прикрепляется через `bot.on('message', middleware)`
   - на этапах ввода статуса/подтверждения удаления/нового пароля возвращает к
     выбору действия по выбранному администратору.
 - `/cancel` в `/admin_change_password` возвращает пользователя в `admin_authenticated`.
+- `/cancel` в `/admin_set_warehouse` возвращает пользователя в состояние, из которого был запущен выбор склада.
 ### Важное поведение
 
 - Команды **никогда не мешают**: middleware не прерывает их выполнение.

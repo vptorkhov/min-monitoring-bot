@@ -18,6 +18,8 @@ export const BOT_COMMANDS = [
     '/admin_login',
     '/admin_register',
     '/admin_change_password',
+    '/admin_set_warehouse',
+    '/admin_clear_warehouse',
     '/superadmin_create_warehouse',
     '/superadmin_edit_warehouses',
     '/superadmin_edit_warehouse_name',

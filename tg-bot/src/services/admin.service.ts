@@ -13,6 +13,7 @@ export interface AdminLoginCandidate {
     passwordHash: string;
     permissionsLevel: number;
     isActive: boolean;
+    warehouseId: number | null;
 }
 
 export interface AdminChangePasswordResult {
@@ -114,7 +115,8 @@ export class AdminService {
             nickname: admin.nickname,
             passwordHash: admin.password_hash,
             permissionsLevel: admin.permissions_level,
-            isActive: admin.is_active
+            isActive: admin.is_active,
+            warehouseId: admin.warehouse_id
         };
     }
 
@@ -141,6 +143,39 @@ export class AdminService {
             return {
                 success: false,
                 reason: 'Не удалось обновить пароль администратора.'
+            };
+        }
+
+        return { success: true };
+    }
+
+    async getAdminWarehouseId(adminId: number): Promise<number | null | undefined> {
+        const admin = await this.repository.getById(adminId);
+        if (!admin) {
+            return undefined;
+        }
+
+        return admin.warehouse_id;
+    }
+
+    async setAdminWarehouse(adminId: number, warehouseId: number): Promise<AdminMutateResult> {
+        const updated = await this.repository.updateWarehouse(adminId, warehouseId);
+        if (!updated) {
+            return {
+                success: false,
+                reason: 'Не удалось выбрать склад для администратора.'
+            };
+        }
+
+        return { success: true };
+    }
+
+    async clearAdminWarehouse(adminId: number): Promise<AdminMutateResult> {
+        const updated = await this.repository.updateWarehouse(adminId, null);
+        if (!updated) {
+            return {
+                success: false,
+                reason: 'Не удалось отвязать администратора от склада.'
             };
         }
 

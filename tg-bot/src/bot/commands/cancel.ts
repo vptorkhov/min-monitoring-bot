@@ -57,9 +57,32 @@ export function registerCancelCommand(
         }
 
         const isAdminGuestOrAuthenticated = currentState === AdminState.GUEST_MODE
-            || currentState === AdminState.AUTHENTICATED;
+            || currentState === AdminState.AUTHENTICATED
+            || currentState === AdminState.AUTHENTICATED_WITH_WAREHOUSE;
         if (isAdminGuestOrAuthenticated) {
             await bot.sendMessage(chatId, 'ℹ️ Нет активного действия для отмены.');
+            return;
+        }
+
+        const isSetWarehouseFlowState = currentState === AdminState.SET_WAREHOUSE_SELECTING;
+        if (isSetWarehouseFlowState) {
+            const tempData = stateManager.getUserTempData<{
+                adminId?: number;
+                adminPermissionsLevel?: number;
+                adminSetReturnState?: string;
+            }>(userId);
+
+            const adminId = tempData?.adminId;
+            const adminPermissionsLevel = tempData?.adminPermissionsLevel;
+            const returnState = tempData?.adminSetReturnState || AdminState.AUTHENTICATED;
+
+            stateManager.setUserState(userId, returnState);
+            stateManager.resetUserTempData(userId);
+            if (adminId && adminPermissionsLevel) {
+                stateManager.setUserTempData(userId, { adminId, adminPermissionsLevel });
+            }
+
+            await bot.sendMessage(chatId, '❌ Выбор склада отменен. Вы возвращены в предыдущее состояние.');
             return;
         }
 
@@ -70,7 +93,11 @@ export function registerCancelCommand(
             const adminId = tempData?.adminId;
             const adminPermissionsLevel = tempData?.adminPermissionsLevel;
 
-            stateManager.setUserState(userId, AdminState.AUTHENTICATED);
+            const currentWarehouseId = adminId ? await adminService.getAdminWarehouseId(adminId) : null;
+            stateManager.setUserState(
+                userId,
+                currentWarehouseId ? AdminState.AUTHENTICATED_WITH_WAREHOUSE : AdminState.AUTHENTICATED
+            );
             stateManager.resetUserTempData(userId);
             if (adminId && adminPermissionsLevel) {
                 stateManager.setUserTempData(userId, { adminId, adminPermissionsLevel });
@@ -86,7 +113,11 @@ export function registerCancelCommand(
             const adminId = tempData?.adminId;
             const adminPermissionsLevel = tempData?.adminPermissionsLevel;
 
-            stateManager.setUserState(userId, AdminState.AUTHENTICATED);
+            const currentWarehouseId = adminId ? await adminService.getAdminWarehouseId(adminId) : null;
+            stateManager.setUserState(
+                userId,
+                currentWarehouseId ? AdminState.AUTHENTICATED_WITH_WAREHOUSE : AdminState.AUTHENTICATED
+            );
             stateManager.resetUserTempData(userId);
             if (adminId && adminPermissionsLevel) {
                 stateManager.setUserTempData(userId, { adminId, adminPermissionsLevel });
