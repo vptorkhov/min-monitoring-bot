@@ -52,7 +52,8 @@ export const AdminState = {
     EDIT_ADMIN_ACTION_SELECTING: 'admin_edit_admin_action_selecting',
     EDIT_ADMIN_AWAITING_STATUS: 'admin_edit_admin_awaiting_status',
     EDIT_ADMIN_AWAITING_DELETE_CONFIRM: 'admin_edit_admin_awaiting_delete_confirm',
-    EDIT_ADMIN_AWAITING_PASSWORD: 'admin_edit_admin_awaiting_password'
+    EDIT_ADMIN_AWAITING_PASSWORD: 'admin_edit_admin_awaiting_password',
+    ADD_SIM_AWAITING_NUMBER: 'admin_add_sim_awaiting_number'
 } as const;
 
 // Тип для состояний админ-режима

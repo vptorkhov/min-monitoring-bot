@@ -35,7 +35,8 @@ const ADMIN_MODE_STATES = new Set<string>([
     AdminState.EDIT_ADMIN_ACTION_SELECTING,
     AdminState.EDIT_ADMIN_AWAITING_STATUS,
     AdminState.EDIT_ADMIN_AWAITING_DELETE_CONFIRM,
-    AdminState.EDIT_ADMIN_AWAITING_PASSWORD
+    AdminState.EDIT_ADMIN_AWAITING_PASSWORD,
+    AdminState.ADD_SIM_AWAITING_NUMBER
 ]);
 
 function normalizeInputToCommand(text?: string): string | null {

@@ -272,6 +272,26 @@ export function registerCancelCommand(
             return;
         }
 
+        const isAddSimFlowState = currentState === AdminState.ADD_SIM_AWAITING_NUMBER;
+        if (isAddSimFlowState) {
+            const tempData = stateManager.getUserTempData<{
+                adminId?: number;
+                adminPermissionsLevel?: number;
+            }>(userId);
+
+            const adminId = tempData?.adminId;
+            const adminPermissionsLevel = tempData?.adminPermissionsLevel;
+
+            stateManager.setUserState(userId, AdminState.AUTHENTICATED_WITH_WAREHOUSE);
+            stateManager.resetUserTempData(userId);
+            if (adminId && adminPermissionsLevel) {
+                stateManager.setUserTempData(userId, { adminId, adminPermissionsLevel });
+            }
+
+            await bot.sendMessage(chatId, '❌ Добавление СИМ отменено. Вы возвращены в авторизованный админ-режим.');
+            return;
+        }
+
         if (await blockIfAdminGuestCommandNotAllowed(bot, chatId, userId, msg.text)) {
             return;
         }

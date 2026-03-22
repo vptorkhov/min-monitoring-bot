@@ -5,6 +5,7 @@ import { SessionService } from "../../services/session.service";
 import { AdminService } from "../../services/admin.service";
 import { WarehouseService } from "../../services/warehouse.service";
 import { WarehouseRepository } from "../../repositories/warehouse.repository";
+import { MobilityDeviceRepository } from "../../repositories/mobility-device.repository";
 import {
   enterAdminMode,
   exitAdminMode,
@@ -15,6 +16,7 @@ import { stateManager } from "../state-manager";
 import { isCommand } from "../../constants/commands.constant";
 import { AdminState } from "../../constants/states.constant";
 import { Warehouse } from "../../repositories/types/warehouse.type";
+import { validateSimNumber } from "../../validators/sim-number.validator";
 
 const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
   remove_keyboard: true,
@@ -31,6 +33,7 @@ type AdminSessionData = {
   editAdmins?: EditableAdminSessionItem[];
   selectedEditAdminId?: number;
   editReturnState?: string;
+  addSimWarehouseId?: number;
 };
 
 type EditableAdminSessionItem = {
@@ -122,6 +125,7 @@ function getAuthenticatedAdminWelcomeMessage(
         "Команды выбранного склада:",
         "/admin_set_warehouse",
         "/admin_clear_warehouse",
+        "/admin_add_sim",
       ]
     : ["", "Команда выбора склада:", "/admin_set_warehouse"];
 
@@ -197,6 +201,7 @@ export function registerAdminModeCommands(
 ) {
   const adminService = new AdminService();
   const warehouseService = new WarehouseService(new WarehouseRepository());
+  const mobilityDeviceRepository = new MobilityDeviceRepository();
 
   const isInAuthenticatedOrSubflow = (currentState?: string) => {
     return (
@@ -216,7 +221,8 @@ export function registerAdminModeCommands(
       currentState === AdminState.EDIT_ADMIN_ACTION_SELECTING ||
       currentState === AdminState.EDIT_ADMIN_AWAITING_STATUS ||
       currentState === AdminState.EDIT_ADMIN_AWAITING_DELETE_CONFIRM ||
-      currentState === AdminState.EDIT_ADMIN_AWAITING_PASSWORD
+      currentState === AdminState.EDIT_ADMIN_AWAITING_PASSWORD ||
+      currentState === AdminState.ADD_SIM_AWAITING_NUMBER
     );
   };
 
@@ -455,7 +461,8 @@ export function registerAdminModeCommands(
       currentState === AdminState.EDIT_ADMIN_ACTION_SELECTING ||
       currentState === AdminState.EDIT_ADMIN_AWAITING_STATUS ||
       currentState === AdminState.EDIT_ADMIN_AWAITING_DELETE_CONFIRM ||
-      currentState === AdminState.EDIT_ADMIN_AWAITING_PASSWORD;
+      currentState === AdminState.EDIT_ADMIN_AWAITING_PASSWORD ||
+      currentState === AdminState.ADD_SIM_AWAITING_NUMBER;
 
     if (wasAuthenticated && adminId) {
       await adminService.setLoginStatus(adminId, false);
@@ -1108,6 +1115,68 @@ export function registerAdminModeCommands(
     );
   });
 
+  bot.onText(/^\/admin_add_sim(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "ℹ️ Сначала войдите в админский режим командой /admin.",
+      );
+      return;
+    }
+
+    const currentState = stateManager.getUserState(telegramId);
+    if (!isInAuthenticatedOrSubflow(currentState)) {
+      await bot.sendMessage(
+        chatId,
+        "🔒 Эта команда доступна только авторизованному администратору. Используйте /admin_login.",
+      );
+      return;
+    }
+
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    if (!tempData.adminId || !tempData.adminPermissionsLevel) {
+      stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+      await bot.sendMessage(
+        chatId,
+        "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
+      );
+      return;
+    }
+
+    const warehouseId = await adminService.getAdminWarehouseId(tempData.adminId);
+    if (warehouseId === undefined) {
+      stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+      await bot.sendMessage(
+        chatId,
+        "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
+      );
+      return;
+    }
+
+    if (warehouseId === null) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда доступна только если выбран склад. Используйте /admin_set_warehouse.",
+      );
+      return;
+    }
+
+    stateManager.setUserState(telegramId, AdminState.ADD_SIM_AWAITING_NUMBER);
+    stateManager.setUserTempData(telegramId, {
+      addSimWarehouseId: warehouseId,
+    });
+
+    await bot.sendMessage(chatId, "Введите номер СИМ");
+  });
+
   bot.on("message", async (msg) => {
     const chatId = msg.chat.id;
     const telegramId = msg.from?.id;
@@ -1135,7 +1204,8 @@ export function registerAdminModeCommands(
       currentState !== AdminState.EDIT_ADMIN_ACTION_SELECTING &&
       currentState !== AdminState.EDIT_ADMIN_AWAITING_STATUS &&
       currentState !== AdminState.EDIT_ADMIN_AWAITING_DELETE_CONFIRM &&
-      currentState !== AdminState.EDIT_ADMIN_AWAITING_PASSWORD
+      currentState !== AdminState.EDIT_ADMIN_AWAITING_PASSWORD &&
+      currentState !== AdminState.ADD_SIM_AWAITING_NUMBER
     ) {
       return;
     }
@@ -1985,6 +2055,75 @@ export function registerAdminModeCommands(
       );
       await bot.sendMessage(chatId, "✅ Пароль администратора успешно изменен.");
       await sendAdminActionsMessage(chatId, resolved.admin);
+      return;
+    }
+
+    if (currentState === AdminState.ADD_SIM_AWAITING_NUMBER) {
+      const tempData =
+        stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const adminId = tempData.adminId;
+      const adminPermissionsLevel = tempData.adminPermissionsLevel;
+      const addSimWarehouseId = tempData.addSimWarehouseId;
+
+      if (!adminId || !adminPermissionsLevel || !addSimWarehouseId) {
+        stateManager.setUserState(
+          telegramId,
+          AdminState.AUTHENTICATED_WITH_WAREHOUSE,
+        );
+        stateManager.resetUserTempData(telegramId);
+        if (adminId && adminPermissionsLevel) {
+          stateManager.setUserTempData(telegramId, {
+            adminId,
+            adminPermissionsLevel,
+          });
+        }
+        await bot.sendMessage(
+          chatId,
+          "⚠️ Не удалось определить контекст. Выполните /admin_add_sim повторно.",
+        );
+        return;
+      }
+
+      const deviceNumber = text.trim().toUpperCase();
+      if (!validateSimNumber(deviceNumber)) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Некорректный номер СИМ. Формат: 3 буквы (латинские или кириллица) и 3 цифры в произвольном порядке (например, АА000А).\n\nВведите номер СИМ",
+        );
+        return;
+      }
+
+      const existing =
+        await mobilityDeviceRepository.findByDeviceNumber(deviceNumber);
+      if (existing) {
+        await bot.sendMessage(
+          chatId,
+          "❌ СИМ с таким номером уже существует. Введите другой номер СИМ",
+        );
+        return;
+      }
+
+      await mobilityDeviceRepository.createDevice(deviceNumber, addSimWarehouseId);
+
+      stateManager.setUserState(
+        telegramId,
+        AdminState.AUTHENTICATED_WITH_WAREHOUSE,
+      );
+      stateManager.resetUserTempData(telegramId);
+      stateManager.setUserTempData(telegramId, {
+        adminId,
+        adminPermissionsLevel,
+      });
+
+      await bot.sendMessage(
+        chatId,
+        `✅ СИМ <b>${escapeHtml(deviceNumber)}</b> успешно добавлен.`,
+        { parse_mode: "HTML" },
+      );
+      await bot.sendMessage(
+        chatId,
+        getAuthenticatedAdminWelcomeMessage(adminPermissionsLevel, true),
+      );
       return;
     }
 
