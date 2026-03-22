@@ -1,6 +1,11 @@
 // src/services/courier.service.ts
 
-import { CourierRepository, CreateCourierData, CourierFromDB } from '../repositories/courier.repository';
+import {
+    CourierRepository,
+    CreateCourierData,
+    CourierFromDB,
+    PendingCourierApprovalCandidate
+} from '../repositories/courier.repository';
 import { validatePhoneNumber, formatPhoneNumber } from '../validators/phone.validator';
 import { extractUserDataFromMessage } from '../utils/telegram.utils';
 import { getDatabase } from '../config/database';
@@ -17,6 +22,11 @@ export interface RegistrationResult {
     success: boolean;
     courier?: CourierFromDB;
     error?: string;
+}
+
+export interface CourierMutateResult {
+    success: boolean;
+    reason?: string;
 }
 
 export class CourierService {
@@ -69,6 +79,27 @@ export class CourierService {
     // Получить список всех активных курьеров (для уведомления об активации)
     async getActiveCouriers(): Promise<CourierFromDB[]> {
         return await this.repository.findAllActive();
+    }
+
+    async getCourierById(courierId: number): Promise<CourierFromDB | null> {
+        return await this.repository.findById(courierId);
+    }
+
+    async getPendingApprovalCouriers(): Promise<PendingCourierApprovalCandidate[]> {
+        return await this.repository.findInactiveWithoutSessions();
+    }
+
+    async activateCourier(courierId: number): Promise<CourierMutateResult> {
+        const updated = await this.repository.updateActiveStatus(courierId, true);
+
+        if (!updated) {
+            return {
+                success: false,
+                reason: 'Не удалось активировать курьера.'
+            };
+        }
+
+        return { success: true };
     }
 
     // Получить активных курьеров, которым ещё не отправлено уведомление

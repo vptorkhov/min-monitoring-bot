@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS mobility_devices (
     id SERIAL PRIMARY KEY,
     device_number VARCHAR(20),
     is_personal BOOLEAN NOT NULL,
-    status VARCHAR(20),
+    status VARCHAR(20) DEFAULT 'ok',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_active BOOLEAN NOT NULL DEFAULT true,

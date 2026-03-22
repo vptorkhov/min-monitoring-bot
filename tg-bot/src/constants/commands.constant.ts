@@ -29,7 +29,14 @@ export const BOT_COMMANDS = [
     '/superadmin_edit_admins',
     '/superadmin_edit_admin_status',
     '/superadmin_edit_admin_delete',
-    '/superadmin_edit_admin_password'
+    '/superadmin_edit_admin_password',
+    '/admin_apply_registrations',
+    '/admin_add_sim',
+    '/admin_sim_interactions',
+    '/admin_sim_change_active',
+    '/admin_sim_change_status',
+    '/admin_sim_story',
+    '/admin_sim_delete'
     // здесь будут добавляться остальные команды
 ] as const;
 
