@@ -165,6 +165,7 @@ function getAuthenticatedAdminWelcomeMessage(
         "/admin_set_warehouse",
         "/admin_clear_warehouse",
         "/admin_add_sim",
+        "/admin_active_sessions",
         "/admin_sim_interactions",
         "/admin_edit_couriers",
       ]
@@ -332,6 +333,17 @@ function formatCourierHistoryRows(history: SessionHistoryByCourierRecord[]): str
 
       return `${index + 1}. <b>${deviceNumber}</b> начало:<b>${start}</b> конец:<b>${end}</b>`;
     })
+    .join("\n");
+}
+
+function formatActiveSessionsByWarehouseRows(
+  sessions: { courierFullName: string; deviceLabel: string }[],
+): string {
+  return sessions
+    .map(
+      (session, index) =>
+        `${index + 1}. <b>${escapeHtml(session.courierFullName)}</b> - <b>${escapeHtml(session.deviceLabel)}</b>`,
+    )
     .join("\n");
 }
 
@@ -1793,6 +1805,86 @@ export function registerAdminModeCommands(
     });
 
     await bot.sendMessage(chatId, "Введите номер СИМ");
+  });
+
+  bot.onText(/^\/admin_active_sessions(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "ℹ️ Сначала войдите в админский режим командой /admin.",
+      );
+      return;
+    }
+
+    const currentState = stateManager.getUserState(telegramId);
+    if (!isInAuthenticatedOrSubflow(currentState)) {
+      await bot.sendMessage(
+        chatId,
+        "🔒 Эта команда доступна только авторизованному администратору. Используйте /admin_login.",
+      );
+      return;
+    }
+
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    if (!tempData.adminId || !tempData.adminPermissionsLevel) {
+      stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+      await bot.sendMessage(
+        chatId,
+        "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
+      );
+      return;
+    }
+
+    const warehouseId = await adminService.getAdminWarehouseId(tempData.adminId);
+    if (warehouseId === undefined) {
+      stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+      await bot.sendMessage(
+        chatId,
+        "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
+      );
+      return;
+    }
+
+    if (warehouseId === null) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда доступна только если выбран склад. Используйте /admin_set_warehouse.",
+      );
+      return;
+    }
+
+    const activeSessions = await sessionService.getActiveSessionsByWarehouse(
+      warehouseId,
+    );
+
+    if (!activeSessions.length) {
+      await bot.sendMessage(
+        chatId,
+        "ℹ️ На выбранном складе сейчас нет активных сессий.",
+      );
+      if (currentState) {
+        stateManager.setUserState(telegramId, currentState);
+      }
+      return;
+    }
+
+    await bot.sendMessage(
+      chatId,
+      `Активные сессии выбранного склада:\n\n${formatActiveSessionsByWarehouseRows(activeSessions)}`,
+      { parse_mode: "HTML" },
+    );
+
+    if (currentState) {
+      stateManager.setUserState(telegramId, currentState);
+    }
   });
 
   bot.onText(/^\/admin_sim_interactions(?:@\w+)?$/, async (msg) => {

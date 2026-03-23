@@ -55,6 +55,7 @@
 
 - `createSession()` — создание новой сессии
 - `findActiveByCourier()` — поиск активной сессии курьера
+- `findActiveByWarehouse()` — получение всех активных сессий выбранного склада с данными курьера и устройства
 - `closeSession()` — завершение сессии с сохранением статуса СИМ и комментария (параметры: `courierId`, опционально `endDate`, `simStatusAfter`, `statusComment`)
 - `findById()` — поиск сессии по ID
 

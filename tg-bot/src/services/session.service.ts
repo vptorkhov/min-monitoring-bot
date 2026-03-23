@@ -1,8 +1,11 @@
 // src/services/session.service.ts
 
 import { CourierService } from './courier.service';
-import { SessionRepository, SessionRecord } from '../repositories/session.repository';
-import { MobilityDeviceRepository, MobilityDevice } from '../repositories/mobility-device.repository';
+import {
+    SessionRepository,
+    SessionRecord
+} from '../repositories/session.repository';
+import { MobilityDeviceRepository } from '../repositories/mobility-device.repository';
 
 export type DamageType = 'ok' | 'warning' | 'broken';
 
@@ -16,6 +19,12 @@ export interface StartSessionResult {
     success: boolean;
     error?: string;
     session?: SessionRecord;
+}
+
+export interface ActiveWarehouseSessionView {
+    courierFullName: string;
+    deviceLabel: string;
+    startDate: Date;
 }
 
 export class SessionService {
@@ -137,5 +146,18 @@ export class SessionService {
         const device = await this.deviceRepo.findById(deviceId);
         if (!device) return 'неизвестный';
         return device.is_personal ? 'Личный' : device.device_number || 'без номера';
+    }
+
+    /** Получает все активные сессии по складу в формате для админского вывода */
+    public async getActiveSessionsByWarehouse(warehouseId: number): Promise<ActiveWarehouseSessionView[]> {
+        const sessions = await this.sessionRepo.findActiveByWarehouse(warehouseId);
+
+        return sessions.map((session) => ({
+            courierFullName: session.courier_full_name,
+            deviceLabel: session.device_is_personal
+                ? 'Личный'
+                : (session.device_number || 'без номера').toUpperCase(),
+            startDate: session.start_date
+        }));
     }
 }

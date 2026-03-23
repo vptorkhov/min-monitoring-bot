@@ -11,7 +11,7 @@
 - **BOT_COMMANDS**: массив всех команд с типизацией
 - **isCommand()**: функция проверки, является ли текст командой
 - **extractCommand()**: функция извлечения команды из текста
-- Включает курьерские команды и команды админ-режима (`/admin`, `/admin_login`, `/admin_register`, `/admin_logout`, `/exit_admin`)
+- Включает курьерские команды и команды админ-режима (`/admin`, `/admin_login`, `/admin_register`, `/admin_logout`, `/exit_admin`, `/admin_active_sessions`)
 
 ### `states.constant.ts`
 
