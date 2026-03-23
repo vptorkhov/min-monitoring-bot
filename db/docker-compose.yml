@@ -8,6 +8,8 @@ services:
       POSTGRES_DB: mobility_db
       POSTGRES_USER: mobility_user
       POSTGRES_PASSWORD: mobility_password
+      TZ: UTC
+      PGTZ: UTC
     ports:
       - "5432:5432"
     volumes:

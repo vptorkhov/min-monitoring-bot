@@ -1,7 +1,11 @@
 // src/config/database.ts
 
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
 import dotenv from 'dotenv';
+
+// Принудительно парсим TIMESTAMP (без таймзоны, OID 1114) как UTC,
+// чтобы pg не интерпретировал значения из БД по локальному времени процесса.
+types.setTypeParser(1114, (val: string) => new Date(val + 'Z'));
 
 dotenv.config();
 
@@ -50,6 +54,9 @@ export async function initializeDatabase(): Promise<Pool> {
         user,
         password,
         database,
+        // Гарантируем UTC-часовой пояс на уровне сессии PostgreSQL,
+        // чтобы NOW() / CURRENT_TIMESTAMP всегда записывали UTC.
+        options: '-c timezone=UTC',
     });
 
     // Попытки подключения с повторными попытками
