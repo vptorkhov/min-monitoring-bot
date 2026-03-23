@@ -31,6 +31,15 @@ export interface PendingCourierApprovalCandidate {
     nickname: string | null;
 }
 
+export interface EditableCourierCandidate {
+    id: number;
+    full_name: string;
+    nickname: string | null;
+    phone_number: string;
+    warehouse_id: number | null;
+    is_active: boolean;
+}
+
 export class CourierRepository {
     constructor(private pool: Pool) { }
 
@@ -109,6 +118,28 @@ export class CourierRepository {
         const result = await this.pool.query<CourierFromDB>(
             'SELECT * FROM couriers WHERE is_active = true'
         );
+        return result.rows;
+    }
+
+    async findEditableByWarehouseId(warehouseId: number): Promise<EditableCourierCandidate[]> {
+        const result = await this.pool.query<EditableCourierCandidate>(
+            `SELECT id, full_name, nickname, phone_number, warehouse_id, is_active
+             FROM couriers
+             WHERE warehouse_id = $1
+             ORDER BY full_name ASC, id ASC`,
+            [warehouseId]
+        );
+
+        return result.rows;
+    }
+
+    async findAllEditable(): Promise<EditableCourierCandidate[]> {
+        const result = await this.pool.query<EditableCourierCandidate>(
+            `SELECT id, full_name, nickname, phone_number, warehouse_id, is_active
+             FROM couriers
+             ORDER BY full_name ASC, id ASC`
+        );
+
         return result.rows;
     }
 

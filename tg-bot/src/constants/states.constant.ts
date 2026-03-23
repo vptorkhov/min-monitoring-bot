@@ -55,12 +55,21 @@ export const AdminState = {
     EDIT_ADMIN_AWAITING_PASSWORD: 'admin_edit_admin_awaiting_password',
     APPLY_REGISTRATIONS_SELECTING: 'admin_apply_registrations_selecting',
     APPLY_REGISTRATION_AWAITING_CONFIRM: 'admin_apply_registration_awaiting_confirm',
+    ADMIN_SESSIONS_HISTORY_AWAITING_DATE: 'admin_sessions_history_awaiting_date',
     ADD_SIM_AWAITING_NUMBER: 'admin_add_sim_awaiting_number',
     SIM_INTERACTIONS_SELECTING: 'admin_sim_interactions_selecting',
     SIM_INTERACTION_ACTION_SELECTING: 'admin_sim_interaction_action_selecting',
     SIM_INTERACTION_AWAITING_ACTIVE_STATUS: 'admin_sim_interaction_awaiting_active_status',
     SIM_INTERACTION_AWAITING_CONDITION_STATUS: 'admin_sim_interaction_awaiting_condition_status',
-    SIM_INTERACTION_AWAITING_DELETE_CONFIRM: 'admin_sim_interaction_awaiting_delete_confirm'
+    SIM_INTERACTION_AWAITING_DELETE_CONFIRM: 'admin_sim_interaction_awaiting_delete_confirm',
+    ADMIN_EDIT_COURIERS_SELECTING: 'admin_edit_couriers_selecting',
+    SUPERADMIN_EDIT_COURIERS_SELECTING: 'superadmin_edit_couriers_selecting',
+    ADMIN_EDIT_COURIER_ACTION_SELECTING: 'admin_edit_courier_action_selecting',
+    SUPERADMIN_EDIT_COURIER_ACTION_SELECTING: 'superadmin_edit_courier_action_selecting',
+    ADMIN_EDIT_COURIER_AWAITING_STATUS: 'admin_edit_courier_awaiting_status',
+    SUPERADMIN_EDIT_COURIER_AWAITING_STATUS: 'superadmin_edit_courier_awaiting_status',
+    ADMIN_COURIER_HISTORY_AWAITING_FULL: 'admin_courier_history_awaiting_full',
+    SUPERADMIN_COURIER_HISTORY_AWAITING_FULL: 'superadmin_courier_history_awaiting_full'
 } as const;
 
 // Тип для состояний админ-режима

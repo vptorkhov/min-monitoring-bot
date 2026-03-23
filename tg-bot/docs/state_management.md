@@ -107,11 +107,20 @@ Middleware прикрепляется через `bot.on('message', middleware)`
 - `admin_edit_admin_awaiting_password` — ожидание нового пароля администратора.
 - `admin_apply_registrations_selecting` — ожидание номера курьера в сценарии `/admin_apply_registrations`.
 - `admin_apply_registration_awaiting_confirm` — ожидание ответа `Да`/`Нет` для подтверждения принятия регистрации курьера.
+- `admin_sessions_history_awaiting_date` — ожидание даты `ДД.ММ.ГГГГ` в сценарии `/admin_sessions_history`.
 - `admin_sim_interactions_selecting` — ожидание выбора СИМ в сценарии `/admin_sim_interactions`.
 - `admin_sim_interaction_action_selecting` — ожидание выбора действия для выбранного СИМ.
 - `admin_sim_interaction_awaiting_active_status` — ожидание нового статуса активности СИМ.
 - `admin_sim_interaction_awaiting_condition_status` — ожидание нового статуса исправности СИМ.
 - `admin_sim_interaction_awaiting_delete_confirm` — ожидание подтверждения удаления СИМ (`ДА`).
+- `admin_edit_couriers_selecting` — ожидание номера курьера в сценарии `/admin_edit_couriers`.
+- `admin_edit_courier_action_selecting` — ожидание выбора действия по выбранному курьеру.
+- `admin_edit_courier_awaiting_status` — ожидание нового статуса активности курьера.
+- `admin_courier_history_awaiting_full` — ожидание ответа `ДА`/`нет`/`/cancel` после вывода последних 50 сессий курьера.
+- `superadmin_edit_couriers_selecting` — ожидание номера курьера в сценарии `/superadmin_edit_couriers`.
+- `superadmin_edit_courier_action_selecting` — ожидание выбора действия по выбранному курьеру (суперадмин).
+- `superadmin_edit_courier_awaiting_status` — ожидание нового статуса активности курьера (суперадмин).
+- `superadmin_courier_history_awaiting_full` — ожидание ответа `ДА`/`нет`/`/cancel` для полной истории (суперадмин).
 
 Поведение:
 
@@ -125,6 +134,8 @@ Middleware прикрепляется через `bot.on('message', middleware)`
   (ввод нового пароля, минимум 6 символов, обновление в БД без разлогина);
 - `/admin_set_warehouse` запускает выбор склада для авторизованного админа: показать список активных складов -> ожидать номер -> при успехе сохранить `admins.warehouse_id` и перевести в `admin_authenticated_with_warehouse`;
 - `/admin_clear_warehouse` доступна только в состоянии с выбранным складом; очищает `admins.warehouse_id` и возвращает в `admin_authenticated`;
+- `/admin_active_sessions` показывает активные сессии выбранного склада в формате `ФИО - СИМ` (для личного устройства используется `Личный`), не запускает отдельный поддиалог и после вывода результата возвращает пользователя в состояние, из которого была вызвана команда;
+- `/admin_sessions_history` запускает одношаговый сценарий запроса даты (`ДД.ММ.ГГГГ`) и показывает историю сессий выбранного склада за выбранный московский день; в выборку входят активные и завершенные сессии, у которых `start_date` попадает в этот день; после показа результата пользователь возвращается в исходное состояние;
 - `/admin_sim_interactions` запускает выбор СИМ выбранного склада (без личного транспорта), далее доступны действия `/admin_sim_change_active`, `/admin_sim_change_status`, `/admin_sim_story`, `/admin_sim_delete` только в рамках выбранного СИМ;
 - `/admin_sim_change_active` и `/admin_sim_change_status` недоступны, если по выбранному СИМ есть активная сессия;
 - при установке статуса исправности `broken` через `/admin_sim_change_status` дополнительно устанавливается `is_active=false`;
@@ -143,6 +154,16 @@ Middleware прикрепляется через `bot.on('message', middleware)`
 - `/admin_apply_registrations` запускает многошаговый сценарий принятия регистраций курьеров
   (выбор номера курьера -> подтверждение `Да`/`Нет`), доступный любому авторизованному
   админу/суперадмину; в список попадают только неактивные курьеры без записей в `session`.
+- `/admin_edit_couriers` запускает многошаговый сценарий взаимодействия с курьерами
+  выбранного склада (выбор курьера -> карточка -> подкоманды статуса/истории);
+  доступен только при выбранном складе.
+- `/superadmin_edit_couriers` запускает аналогичный сценарий по всем курьерам
+  (включая курьеров без склада), доступный только суперадмину (`permissions_level >= 2`).
+- `/admin_edit_courier_status` и `/superadmin_edit_courier_status` меняют `couriers.is_active`
+  по вариантам ввода `1`/`2` и текстовым эквивалентам `Активный`/`Отключен`.
+- `/admin_courier_history` и `/superadmin_courier_history` сначала показывают последние 50
+  сессий курьера (новейшие -> старейшие), затем ожидают `ДА` (строго верхний регистр)
+  для полной истории или `/cancel`/`нет` для возврата.
 - `/cancel` в этом сценарии работает контекстно:
   - на этапе выбора склада или выбора действия возвращает в состояние до запуска
     `/superadmin_edit_warehouses`;
@@ -162,7 +183,12 @@ Middleware прикрепляется через `bot.on('message', middleware)`
     `/admin_apply_registrations`.
 - `/cancel` в `/admin_change_password` возвращает пользователя в `admin_authenticated`.
 - `/cancel` в `/admin_set_warehouse` возвращает пользователя в состояние, из которого был запущен выбор склада.
+- `/cancel` в `/admin_sessions_history` на этапе ввода даты возвращает пользователя в состояние, из которого была вызвана команда.
 - `/cancel` в `/admin_sim_interactions` на этапе выбора СИМ (где бот подсказывает `/cancel - вернуться в состояние выбранного склада`) возвращает в `admin_authenticated_with_warehouse`, а в подэтапах действий/изменений/удаления (где бот подсказывает `/cancel - вернуться к списку СИМ`) возвращает к обновленному списку СИМ.
+- `/cancel` в `/admin_edit_couriers` и `/superadmin_edit_couriers` работает контекстно:
+  - на этапе выбора номера курьера возвращает в состояние до запуска базовой команды;
+  - на этапе выбора действия по курьеру возвращает к списку курьеров;
+  - на этапах ввода статуса и ожидания полной истории возвращает к карточке выбранного курьера.
 ### Важное поведение
 
 - Команды **никогда не мешают**: middleware не прерывает их выполнение.

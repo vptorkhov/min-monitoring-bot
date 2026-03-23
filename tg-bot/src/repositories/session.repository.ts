@@ -37,6 +37,53 @@ export interface SessionHistoryByDeviceRecord {
     courier_full_name: string;
 }
 
+export interface ActiveSessionByCourierWithDeviceRecord {
+    id: number;
+    courier_id: number;
+    device_id: number;
+    warehouse_id: number;
+    start_date: Date;
+    end_date: Date | null;
+    sim_status_after: string | null;
+    status_comment: string | null;
+    is_active: boolean;
+    device_number: string;
+}
+
+export interface ActiveSessionByWarehouseRecord {
+    id: number;
+    courier_id: number;
+    device_id: number;
+    warehouse_id: number;
+    start_date: Date;
+    end_date: Date | null;
+    sim_status_after: string | null;
+    status_comment: string | null;
+    is_active: boolean;
+    courier_full_name: string;
+    device_number: string | null;
+    device_is_personal: boolean;
+}
+
+export interface SessionHistoryByWarehouseRecord {
+    id: number;
+    warehouse_id: number;
+    start_date: Date;
+    end_date: Date | null;
+    sim_status_after: string | null;
+    status_comment: string | null;
+    is_active: boolean;
+    courier_full_name: string;
+    device_number: string | null;
+    device_is_personal: boolean;
+}
+
+export interface SessionHistoryByCourierRecord {
+    start_date: Date;
+    end_date: Date | null;
+    device_number: string;
+}
+
 export class SessionRepository {
     private db: Pool;
 
@@ -146,5 +193,107 @@ export class SessionRepository {
 
         const { rows } = await this.db.query<{ status_comment: string }>(query, [deviceId]);
         return rows[0]?.status_comment ?? null;
+    }
+
+    public async findActiveByCourierWithDevice(courierId: number): Promise<ActiveSessionByCourierWithDeviceRecord | null> {
+        const query = `
+            SELECT
+                s.*,
+                d.device_number
+            FROM session s
+            INNER JOIN mobility_devices d ON d.id = s.device_id
+            WHERE s.courier_id = $1
+              AND s.is_active = true
+            ORDER BY s.start_date DESC, s.id DESC
+            LIMIT 1
+        `;
+
+        const { rows } = await this.db.query<ActiveSessionByCourierWithDeviceRecord>(query, [courierId]);
+        return rows[0] ?? null;
+    }
+
+    public async findActiveByWarehouse(warehouseId: number): Promise<ActiveSessionByWarehouseRecord[]> {
+        const query = `
+            SELECT
+                s.*,
+                c.full_name AS courier_full_name,
+                d.device_number,
+                d.is_personal AS device_is_personal
+            FROM session s
+            INNER JOIN couriers c ON c.id = s.courier_id
+            INNER JOIN mobility_devices d ON d.id = s.device_id
+            WHERE s.warehouse_id = $1
+              AND s.is_active = true
+            ORDER BY c.full_name ASC, s.start_date DESC, s.id DESC
+        `;
+
+        const { rows } = await this.db.query<ActiveSessionByWarehouseRecord>(query, [warehouseId]);
+        return rows;
+    }
+
+    public async getHistoryByWarehouseAndStartDateRange(
+        warehouseId: number,
+        startDateFromUtc: Date,
+        startDateToUtc: Date,
+    ): Promise<SessionHistoryByWarehouseRecord[]> {
+        const query = `
+            SELECT
+                s.id,
+                s.warehouse_id,
+                s.start_date,
+                s.end_date,
+                s.sim_status_after,
+                s.status_comment,
+                s.is_active,
+                c.full_name AS courier_full_name,
+                d.device_number,
+                d.is_personal AS device_is_personal
+            FROM session s
+            INNER JOIN couriers c ON c.id = s.courier_id
+            INNER JOIN mobility_devices d ON d.id = s.device_id
+            WHERE s.warehouse_id = $1
+              AND s.start_date >= $2
+              AND s.start_date < $3
+            ORDER BY s.start_date DESC, s.id DESC
+        `;
+
+        const { rows } = await this.db.query<SessionHistoryByWarehouseRecord>(query, [
+            warehouseId,
+            startDateFromUtc.toISOString(),
+            startDateToUtc.toISOString(),
+        ]);
+
+        return rows;
+    }
+
+    public async getHistoryByCourier(courierId: number, limit?: number): Promise<SessionHistoryByCourierRecord[]> {
+        const hasLimit = typeof limit === 'number' && Number.isFinite(limit) && limit > 0;
+
+        const query = hasLimit
+            ? `
+                SELECT
+                    s.start_date,
+                    s.end_date,
+                    d.device_number
+                FROM session s
+                INNER JOIN mobility_devices d ON d.id = s.device_id
+                WHERE s.courier_id = $1
+                ORDER BY s.start_date DESC, s.id DESC
+                LIMIT $2
+            `
+            : `
+                SELECT
+                    s.start_date,
+                    s.end_date,
+                    d.device_number
+                FROM session s
+                INNER JOIN mobility_devices d ON d.id = s.device_id
+                WHERE s.courier_id = $1
+                ORDER BY s.start_date DESC, s.id DESC
+            `;
+
+        const params = hasLimit ? [courierId, Math.floor(limit as number)] : [courierId];
+        const { rows } = await this.db.query<SessionHistoryByCourierRecord>(query, params);
+        return rows;
     }
 }
