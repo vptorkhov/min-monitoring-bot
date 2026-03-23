@@ -36,7 +36,13 @@ export const BOT_COMMANDS = [
     '/admin_sim_change_active',
     '/admin_sim_change_status',
     '/admin_sim_story',
-    '/admin_sim_delete'
+    '/admin_sim_delete',
+    '/admin_edit_couriers',
+    '/admin_edit_courier_status',
+    '/admin_courier_history',
+    '/superadmin_edit_couriers',
+    '/superadmin_edit_courier_status',
+    '/superadmin_courier_history'
     // здесь будут добавляться остальные команды
 ] as const;
 

@@ -37,6 +37,25 @@ export interface SessionHistoryByDeviceRecord {
     courier_full_name: string;
 }
 
+export interface ActiveSessionByCourierWithDeviceRecord {
+    id: number;
+    courier_id: number;
+    device_id: number;
+    warehouse_id: number;
+    start_date: Date;
+    end_date: Date | null;
+    sim_status_after: string | null;
+    status_comment: string | null;
+    is_active: boolean;
+    device_number: string;
+}
+
+export interface SessionHistoryByCourierRecord {
+    start_date: Date;
+    end_date: Date | null;
+    device_number: string;
+}
+
 export class SessionRepository {
     private db: Pool;
 
@@ -146,5 +165,53 @@ export class SessionRepository {
 
         const { rows } = await this.db.query<{ status_comment: string }>(query, [deviceId]);
         return rows[0]?.status_comment ?? null;
+    }
+
+    public async findActiveByCourierWithDevice(courierId: number): Promise<ActiveSessionByCourierWithDeviceRecord | null> {
+        const query = `
+            SELECT
+                s.*,
+                d.device_number
+            FROM session s
+            INNER JOIN mobility_devices d ON d.id = s.device_id
+            WHERE s.courier_id = $1
+              AND s.is_active = true
+            ORDER BY s.start_date DESC, s.id DESC
+            LIMIT 1
+        `;
+
+        const { rows } = await this.db.query<ActiveSessionByCourierWithDeviceRecord>(query, [courierId]);
+        return rows[0] ?? null;
+    }
+
+    public async getHistoryByCourier(courierId: number, limit?: number): Promise<SessionHistoryByCourierRecord[]> {
+        const hasLimit = typeof limit === 'number' && Number.isFinite(limit) && limit > 0;
+
+        const query = hasLimit
+            ? `
+                SELECT
+                    s.start_date,
+                    s.end_date,
+                    d.device_number
+                FROM session s
+                INNER JOIN mobility_devices d ON d.id = s.device_id
+                WHERE s.courier_id = $1
+                ORDER BY s.start_date DESC, s.id DESC
+                LIMIT $2
+            `
+            : `
+                SELECT
+                    s.start_date,
+                    s.end_date,
+                    d.device_number
+                FROM session s
+                INNER JOIN mobility_devices d ON d.id = s.device_id
+                WHERE s.courier_id = $1
+                ORDER BY s.start_date DESC, s.id DESC
+            `;
+
+        const params = hasLimit ? [courierId, Math.floor(limit as number)] : [courierId];
+        const { rows } = await this.db.query<SessionHistoryByCourierRecord>(query, params);
+        return rows;
     }
 }

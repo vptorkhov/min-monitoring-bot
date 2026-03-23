@@ -4,6 +4,8 @@ import { CourierService } from '../../services/courier.service';
 import { SessionService } from '../../services/session.service';
 import { AdminService } from '../../services/admin.service';
 import { MobilityDeviceRepository } from '../../repositories/mobility-device.repository';
+import { CourierRepository } from '../../repositories/courier.repository';
+import { getDatabase } from '../../config/database';
 import {
     stateManager
 } from '../state-manager';
@@ -28,6 +30,7 @@ export function registerCancelCommand(
 ) {
     const adminService = new AdminService();
     const mobilityDeviceRepository = new MobilityDeviceRepository();
+    const courierRepository = new CourierRepository(getDatabase());
 
     const formatEditableAdminsList = (admins: { nickname: string }[]): string => {
         return admins
@@ -455,6 +458,122 @@ export function registerCancelCommand(
                 chatId,
                 `❌ Действие отменено. Вы возвращены к списку СИМ.\n\nВведите номер СИМ:\n\n${simList}`
             );
+            return;
+        }
+
+        const isEditCouriersSelectingState = currentState === AdminState.ADMIN_EDIT_COURIERS_SELECTING
+            || currentState === AdminState.SUPERADMIN_EDIT_COURIERS_SELECTING;
+        if (isEditCouriersSelectingState) {
+            const tempData = stateManager.getUserTempData<{
+                adminId?: number;
+                adminPermissionsLevel?: number;
+                editCouriersReturnState?: string;
+            }>(userId);
+
+            const adminId = tempData?.adminId;
+            const adminPermissionsLevel = tempData?.adminPermissionsLevel;
+            const returnState = tempData?.editCouriersReturnState || AdminState.AUTHENTICATED;
+
+            stateManager.setUserState(userId, returnState);
+            stateManager.resetUserTempData(userId);
+            if (adminId && adminPermissionsLevel) {
+                stateManager.setUserTempData(userId, { adminId, adminPermissionsLevel });
+            }
+
+            await bot.sendMessage(chatId, '❌ Взаимодействие с курьерами отменено. Вы возвращены в предыдущее состояние.');
+            return;
+        }
+
+        const isEditCourierActionSelectingState = currentState === AdminState.ADMIN_EDIT_COURIER_ACTION_SELECTING
+            || currentState === AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING;
+        if (isEditCourierActionSelectingState) {
+            const isSuperadmin = currentState === AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING;
+            const tempData = stateManager.getUserTempData<{
+                adminId?: number;
+                adminPermissionsLevel?: number;
+                editCouriers?: { id: number; fullName: string }[];
+                editCouriersReturnState?: string;
+            }>(userId);
+
+            const couriers = tempData?.editCouriers || [];
+            if (!couriers.length) {
+                const adminId = tempData?.adminId;
+                const adminPermissionsLevel = tempData?.adminPermissionsLevel;
+                const returnState = tempData?.editCouriersReturnState || AdminState.AUTHENTICATED;
+
+                stateManager.setUserState(userId, returnState);
+                stateManager.resetUserTempData(userId);
+                if (adminId && adminPermissionsLevel) {
+                    stateManager.setUserTempData(userId, { adminId, adminPermissionsLevel });
+                }
+
+                await bot.sendMessage(chatId, '❌ Действие отменено. Список курьеров пуст. Вы возвращены в предыдущее состояние.');
+                return;
+            }
+
+            const selectingState = isSuperadmin
+                ? AdminState.SUPERADMIN_EDIT_COURIERS_SELECTING
+                : AdminState.ADMIN_EDIT_COURIERS_SELECTING;
+
+            stateManager.setUserState(userId, selectingState);
+            stateManager.resetUserTempData(userId);
+            stateManager.setUserTempData(userId, {
+                adminId: tempData?.adminId,
+                adminPermissionsLevel: tempData?.adminPermissionsLevel,
+                editCouriers: couriers,
+                editCouriersReturnState: tempData?.editCouriersReturnState,
+                selectedEditCourierId: undefined
+            });
+
+            const listText = couriers
+                .map((c, index) => `${index + 1}. ${c.fullName}`)
+                .join('\n');
+            await bot.sendMessage(
+                chatId,
+                `❌ Действие отменено. Вы возвращены к выбору курьера.\n\nВведите номер курьера:\n\n${listText}\n\n/cancel - вернуться в предыдущее состояние.`
+            );
+            return;
+        }
+
+        const isEditCourierSubflowState = currentState === AdminState.ADMIN_EDIT_COURIER_AWAITING_STATUS
+            || currentState === AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_STATUS
+            || currentState === AdminState.ADMIN_COURIER_HISTORY_AWAITING_FULL
+            || currentState === AdminState.SUPERADMIN_COURIER_HISTORY_AWAITING_FULL;
+        if (isEditCourierSubflowState) {
+            const isSuperadmin = currentState === AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_STATUS
+                || currentState === AdminState.SUPERADMIN_COURIER_HISTORY_AWAITING_FULL;
+
+            const tempData = stateManager.getUserTempData<{
+                adminId?: number;
+                adminPermissionsLevel?: number;
+                selectedEditCourierId?: number;
+                editCouriers?: unknown[];
+                editCouriersReturnState?: string;
+            }>(userId);
+
+            const selectedEditCourierId = tempData?.selectedEditCourierId;
+            const nextState = isSuperadmin
+                ? AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING
+                : AdminState.ADMIN_EDIT_COURIER_ACTION_SELECTING;
+
+            stateManager.setUserState(userId, nextState);
+
+            if (selectedEditCourierId) {
+                const row = await courierRepository.findById(selectedEditCourierId);
+                if (row) {
+                    const statusText = row.is_active ? 'Активный' : 'Отключен';
+                    const statusCmd = isSuperadmin ? '/superadmin_edit_courier_status' : '/admin_edit_courier_status';
+                    const historyCmd = isSuperadmin ? '/superadmin_courier_history' : '/admin_courier_history';
+                    await bot.sendMessage(
+                        chatId,
+                        `❌ Действие отменено. Вы возвращены к информации о курьере.\n\nКурьер: <b>${row.full_name}</b>\nТелефон: <b>${row.phone_number}</b>\nСтатус: <b>${statusText}</b>\n\nДоступные команды:\n${statusCmd}\n${historyCmd}\n\n/cancel - вернуться к списку курьеров.`,
+                        { parse_mode: 'HTML' }
+                    );
+                    return;
+                }
+            }
+
+            await bot.sendMessage(chatId, '❌ Действие отменено. Вы возвращены к выбору операции по курьеру.');
             return;
         }
 

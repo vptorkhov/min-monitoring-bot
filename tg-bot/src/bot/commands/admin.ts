@@ -8,8 +8,10 @@ import { WarehouseRepository } from "../../repositories/warehouse.repository";
 import { MobilityDeviceRepository } from "../../repositories/mobility-device.repository";
 import {
   SessionHistoryByDeviceRecord,
+  SessionHistoryByCourierRecord,
   SessionRepository,
 } from "../../repositories/session.repository";
+import { CourierRepository } from "../../repositories/courier.repository";
 import {
   enterAdminMode,
   exitAdminMode,
@@ -21,6 +23,7 @@ import { isCommand } from "../../constants/commands.constant";
 import { AdminState } from "../../constants/states.constant";
 import { Warehouse } from "../../repositories/types/warehouse.type";
 import { validateSimNumber } from "../../validators/sim-number.validator";
+import { getDatabase } from "../../config/database";
 
 const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
   remove_keyboard: true,
@@ -44,6 +47,10 @@ type AdminSessionData = {
   simInteractionWarehouseId?: number;
   simInteractionDevices?: SimInteractionSessionItem[];
   selectedSimInteractionDeviceId?: number;
+  editCouriers?: EditableCourierSessionItem[];
+  selectedEditCourierId?: number;
+  editCouriersReturnState?: string;
+  editCouriersWarehouseId?: number;
 };
 
 type EditableAdminSessionItem = {
@@ -63,6 +70,15 @@ type PendingCourierApprovalSessionItem = {
   id: number;
   fullName: string;
   nickname: string | null;
+};
+
+type EditableCourierSessionItem = {
+  id: number;
+  fullName: string;
+  nickname: string | null;
+  phoneNumber: string;
+  warehouseId: number | null;
+  isActive: boolean;
 };
 
 function escapeMarkdown(text: string): string {
@@ -150,6 +166,7 @@ function getAuthenticatedAdminWelcomeMessage(
         "/admin_clear_warehouse",
         "/admin_add_sim",
         "/admin_sim_interactions",
+        "/admin_edit_couriers",
       ]
     : ["", "Команда выбора склада:", "/admin_set_warehouse"];
 
@@ -163,6 +180,7 @@ function getAuthenticatedAdminWelcomeMessage(
       "/superadmin_create_warehouse",
       "/superadmin_edit_warehouses",
       "/superadmin_edit_admins",
+      "/superadmin_edit_couriers",
       ...warehouseCommands,
       "",
       "Общие команды админ-режима:",
@@ -305,6 +323,18 @@ function formatSimHistoryRows(history: SessionHistoryByDeviceRecord[]): string {
     .join("\n\n");
 }
 
+function formatCourierHistoryRows(history: SessionHistoryByCourierRecord[]): string {
+  return history
+    .map((row, index) => {
+      const start = formatMoscowTime(row.start_date);
+      const end = row.end_date ? formatMoscowTime(row.end_date) : "-";
+      const deviceNumber = escapeHtml((row.device_number || "-").toUpperCase());
+
+      return `${index + 1}. <b>${deviceNumber}</b> начало:<b>${start}</b> конец:<b>${end}</b>`;
+    })
+    .join("\n");
+}
+
 async function restoreCourierFlowAfterExitAdmin(
   bot: TelegramBot,
   chatId: number,
@@ -347,6 +377,7 @@ export function registerAdminModeCommands(
   const warehouseService = new WarehouseService(new WarehouseRepository());
   const mobilityDeviceRepository = new MobilityDeviceRepository();
   const sessionRepository = new SessionRepository();
+  const courierRepository = new CourierRepository(getDatabase());
 
   const isInAuthenticatedOrSubflow = (currentState?: string) => {
     return (
@@ -374,7 +405,15 @@ export function registerAdminModeCommands(
       currentState === AdminState.SIM_INTERACTION_ACTION_SELECTING ||
       currentState === AdminState.SIM_INTERACTION_AWAITING_ACTIVE_STATUS ||
       currentState === AdminState.SIM_INTERACTION_AWAITING_CONDITION_STATUS ||
-      currentState === AdminState.SIM_INTERACTION_AWAITING_DELETE_CONFIRM
+      currentState === AdminState.SIM_INTERACTION_AWAITING_DELETE_CONFIRM ||
+      currentState === AdminState.ADMIN_EDIT_COURIERS_SELECTING ||
+      currentState === AdminState.SUPERADMIN_EDIT_COURIERS_SELECTING ||
+      currentState === AdminState.ADMIN_EDIT_COURIER_ACTION_SELECTING ||
+      currentState === AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING ||
+      currentState === AdminState.ADMIN_EDIT_COURIER_AWAITING_STATUS ||
+      currentState === AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_STATUS ||
+      currentState === AdminState.ADMIN_COURIER_HISTORY_AWAITING_FULL ||
+      currentState === AdminState.SUPERADMIN_COURIER_HISTORY_AWAITING_FULL
     );
   };
 
@@ -496,6 +535,163 @@ export function registerAdminModeCommands(
     await bot.sendMessage(
       chatId,
       `Выбран администратор:\n<b>${escapeHtml(admin.nickname)}</b>\nСтатус: <b>${getAdminStatusText(admin.isActive)}</b>\n\nДоступные действия:\n${commandsList}`,
+      { parse_mode: "HTML" },
+    );
+  };
+
+  const loadEditableCouriersByWarehouse = async (
+    warehouseId: number,
+  ): Promise<EditableCourierSessionItem[]> => {
+    const couriers = await courierRepository.findEditableByWarehouseId(warehouseId);
+
+    return couriers.map((courier) => ({
+      id: courier.id,
+      fullName: courier.full_name,
+      nickname: courier.nickname,
+      phoneNumber: courier.phone_number,
+      warehouseId: courier.warehouse_id,
+      isActive: courier.is_active,
+    }));
+  };
+
+  const loadAllEditableCouriers = async (): Promise<EditableCourierSessionItem[]> => {
+    const couriers = await courierRepository.findAllEditable();
+
+    return couriers.map((courier) => ({
+      id: courier.id,
+      fullName: courier.full_name,
+      nickname: courier.nickname,
+      phoneNumber: courier.phone_number,
+      warehouseId: courier.warehouse_id,
+      isActive: courier.is_active,
+    }));
+  };
+
+  const formatEditableCouriersList = (
+    couriers: EditableCourierSessionItem[],
+  ): string => {
+    return couriers
+      .map((courier, index) => `${index + 1}. <b>${escapeHtml(courier.fullName)}</b>`)
+      .join("\n");
+  };
+
+  const sendEditableCouriersListMessage = async (
+    chatId: number,
+    couriers: EditableCourierSessionItem[],
+  ) => {
+    await bot.sendMessage(
+      chatId,
+      `Введите номер курьера:\n\n${formatEditableCouriersList(couriers)}`,
+      { parse_mode: "HTML" },
+    );
+  };
+
+  const resolveWarehouseName = async (warehouseId: number | null): Promise<string> => {
+    if (!warehouseId) {
+      return "Не выбран";
+    }
+
+    const warehouse = await warehouseService.getWarehouseById(warehouseId);
+    if (!warehouse) {
+      return `ID ${warehouseId}`;
+    }
+
+    return warehouse.name;
+  };
+
+  const tryResolveSelectedEditCourier = async (
+    telegramId: number,
+    chatId: number,
+    commandHint: string,
+  ): Promise<{ tempData: AdminSessionData; courier: EditableCourierSessionItem } | null> => {
+    const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    let selectedEditCourierId = tempData.selectedEditCourierId;
+
+    // Defensive recovery: if a subcommand arrives very quickly and only one courier is in context,
+    // auto-select it to keep the flow stable.
+    if (!selectedEditCourierId && (tempData.editCouriers?.length || 0) === 1) {
+      selectedEditCourierId = tempData.editCouriers?.[0]?.id;
+      if (selectedEditCourierId) {
+        stateManager.setUserTempData(telegramId, {
+          selectedEditCourierId,
+        });
+      }
+    }
+
+    if (!selectedEditCourierId) {
+      await bot.sendMessage(
+        chatId,
+        `❌ Команда недоступна без выбора курьера через ${commandHint}.`,
+      );
+      return null;
+    }
+
+    const courierRow = await courierRepository.findById(selectedEditCourierId);
+    if (!courierRow) {
+      await bot.sendMessage(
+        chatId,
+        `❌ Курьер не найден. Запустите ${commandHint} заново.`,
+      );
+      return null;
+    }
+
+    const selectedWarehouseId = tempData.editCouriersWarehouseId;
+    if (selectedWarehouseId && courierRow.warehouse_id !== selectedWarehouseId) {
+      await bot.sendMessage(
+        chatId,
+        `❌ Выбранный курьер не относится к текущему складу. Запустите ${commandHint} заново.`,
+      );
+      return null;
+    }
+
+    return {
+      tempData,
+      courier: {
+        id: courierRow.id,
+        fullName: courierRow.full_name,
+        nickname: courierRow.nickname,
+        phoneNumber: courierRow.phone_number,
+        warehouseId: courierRow.warehouse_id,
+        isActive: courierRow.is_active,
+      },
+    };
+  };
+
+  const sendCourierActionsMessage = async (
+    chatId: number,
+    courier: EditableCourierSessionItem,
+    isSuperadmin: boolean,
+  ) => {
+    const statusCmd = isSuperadmin
+      ? "/superadmin_edit_courier_status"
+      : "/admin_edit_courier_status";
+    const historyCmd = isSuperadmin
+      ? "/superadmin_courier_history"
+      : "/admin_courier_history";
+    const warehouseName = await resolveWarehouseName(courier.warehouseId);
+    const activeSession = await sessionRepository.findActiveByCourierWithDevice(courier.id);
+
+    const activeSessionText = activeSession
+      ? `Да, СИМ: <b>${escapeHtml((activeSession.device_number || "-").toUpperCase())}</b>, начало: <b>${formatMoscowTime(activeSession.start_date)}</b>`
+      : "Нет";
+    const nicknameText = courier.nickname ? escapeHtml(courier.nickname) : "-";
+
+    await bot.sendMessage(
+      chatId,
+      [
+        `Курьер: <b>${escapeHtml(courier.fullName)}</b>`,
+        `Телефон: <b>${escapeHtml(courier.phoneNumber)}</b>`,
+        `Никнейм: <b>${nicknameText}</b>`,
+        `Статус: <b>${getAdminStatusText(courier.isActive)}</b>`,
+        `Склад: <b>${escapeHtml(warehouseName)}</b>`,
+        `Активная сессия: ${activeSessionText}`,
+        "",
+        "Доступные команды:",
+        statusCmd,
+        historyCmd,
+        "",
+        "/cancel - вернуться к списку курьеров.",
+      ].join("\n"),
       { parse_mode: "HTML" },
     );
   };
@@ -816,7 +1012,15 @@ export function registerAdminModeCommands(
       currentState === AdminState.SIM_INTERACTION_ACTION_SELECTING ||
       currentState === AdminState.SIM_INTERACTION_AWAITING_ACTIVE_STATUS ||
       currentState === AdminState.SIM_INTERACTION_AWAITING_CONDITION_STATUS ||
-      currentState === AdminState.SIM_INTERACTION_AWAITING_DELETE_CONFIRM;
+      currentState === AdminState.SIM_INTERACTION_AWAITING_DELETE_CONFIRM ||
+      currentState === AdminState.ADMIN_EDIT_COURIERS_SELECTING ||
+      currentState === AdminState.SUPERADMIN_EDIT_COURIERS_SELECTING ||
+      currentState === AdminState.ADMIN_EDIT_COURIER_ACTION_SELECTING ||
+      currentState === AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING ||
+      currentState === AdminState.ADMIN_EDIT_COURIER_AWAITING_STATUS ||
+      currentState === AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_STATUS ||
+      currentState === AdminState.ADMIN_COURIER_HISTORY_AWAITING_FULL ||
+      currentState === AdminState.SUPERADMIN_COURIER_HISTORY_AWAITING_FULL;
 
     if (wasAuthenticated && adminId) {
       await adminService.setLoginStatus(adminId, false);
@@ -1836,6 +2040,309 @@ export function registerAdminModeCommands(
     );
   });
 
+  bot.onText(/^\/admin_edit_couriers(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "ℹ️ Сначала войдите в админский режим командой /admin.",
+      );
+      return;
+    }
+
+    const currentState = stateManager.getUserState(telegramId);
+    if (!isInAuthenticatedOrSubflow(currentState)) {
+      await bot.sendMessage(
+        chatId,
+        "🔒 Эта команда доступна только авторизованному администратору. Используйте /admin_login.",
+      );
+      return;
+    }
+
+    const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    if (!tempData.adminId || !tempData.adminPermissionsLevel) {
+      stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+      await bot.sendMessage(
+        chatId,
+        "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
+      );
+      return;
+    }
+
+    const warehouseId = await adminService.getAdminWarehouseId(tempData.adminId);
+    if (warehouseId === undefined) {
+      stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+      await bot.sendMessage(
+        chatId,
+        "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
+      );
+      return;
+    }
+
+    if (warehouseId === null) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда доступна только если выбран склад. Используйте /admin_set_warehouse.",
+      );
+      return;
+    }
+
+    const couriers = await loadEditableCouriersByWarehouse(warehouseId);
+    if (!couriers.length) {
+      await bot.sendMessage(chatId, "❌ Список курьеров выбранного склада пуст.");
+      return;
+    }
+
+    stateManager.setUserState(telegramId, AdminState.ADMIN_EDIT_COURIERS_SELECTING);
+    stateManager.setUserTempData(telegramId, {
+      editCouriers: couriers,
+      selectedEditCourierId: undefined,
+      editCouriersReturnState: currentState || AdminState.AUTHENTICATED,
+      editCouriersWarehouseId: warehouseId,
+    });
+
+    await sendEditableCouriersListMessage(chatId, couriers);
+  });
+
+  bot.onText(/^\/superadmin_edit_couriers(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "ℹ️ Сначала войдите в админский режим командой /admin.",
+      );
+      return;
+    }
+
+    const currentState = stateManager.getUserState(telegramId);
+    if (!isInAuthenticatedOrSubflow(currentState)) {
+      await bot.sendMessage(
+        chatId,
+        "🔒 Эта команда доступна только авторизованному администратору. Используйте /admin_login.",
+      );
+      return;
+    }
+
+    const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    const permissionsLevel = tempData.adminPermissionsLevel ?? 0;
+    if (permissionsLevel < 2) {
+      await bot.sendMessage(chatId, "🚫 Нет прав на эту команду.");
+      return;
+    }
+
+    const couriers = await loadAllEditableCouriers();
+    if (!couriers.length) {
+      await bot.sendMessage(chatId, "❌ Список курьеров пуст.");
+      return;
+    }
+
+    stateManager.setUserState(telegramId, AdminState.SUPERADMIN_EDIT_COURIERS_SELECTING);
+    stateManager.setUserTempData(telegramId, {
+      editCouriers: couriers,
+      selectedEditCourierId: undefined,
+      editCouriersReturnState: currentState || AdminState.AUTHENTICATED,
+      editCouriersWarehouseId: undefined,
+    });
+
+    await sendEditableCouriersListMessage(chatId, couriers);
+  });
+
+  bot.onText(/^\/admin_edit_courier_status(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора курьера через /admin_edit_couriers.",
+      );
+      return;
+    }
+
+    const resolved = await tryResolveSelectedEditCourier(
+      telegramId,
+      chatId,
+      "/admin_edit_couriers",
+    );
+    if (!resolved) {
+      return;
+    }
+
+    stateManager.setUserState(telegramId, AdminState.ADMIN_EDIT_COURIER_AWAITING_STATUS);
+    await bot.sendMessage(
+      chatId,
+      `Курьер: <b>${escapeHtml(resolved.courier.fullName)}</b>\nТекущий статус: <b>${getAdminStatusText(resolved.courier.isActive)}</b>\n\nВыберите статус:\n1. Активный\n2. Отключен`,
+      { parse_mode: "HTML" },
+    );
+  });
+
+  bot.onText(/^\/superadmin_edit_courier_status(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора курьера через /superadmin_edit_couriers.",
+      );
+      return;
+    }
+
+    const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    if ((tempData.adminPermissionsLevel ?? 0) < 2) {
+      await bot.sendMessage(chatId, "🚫 Нет прав на эту команду.");
+      return;
+    }
+
+    const resolved = await tryResolveSelectedEditCourier(
+      telegramId,
+      chatId,
+      "/superadmin_edit_couriers",
+    );
+    if (!resolved) {
+      return;
+    }
+
+    stateManager.setUserState(telegramId, AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_STATUS);
+    await bot.sendMessage(
+      chatId,
+      `Курьер: <b>${escapeHtml(resolved.courier.fullName)}</b>\nТекущий статус: <b>${getAdminStatusText(resolved.courier.isActive)}</b>\n\nВыберите статус:\n1. Активный\n2. Отключен`,
+      { parse_mode: "HTML" },
+    );
+  });
+
+  bot.onText(/^\/admin_courier_history(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора курьера через /admin_edit_couriers.",
+      );
+      return;
+    }
+
+    const resolved = await tryResolveSelectedEditCourier(
+      telegramId,
+      chatId,
+      "/admin_edit_couriers",
+    );
+    if (!resolved) {
+      return;
+    }
+
+    const history = await sessionRepository.getHistoryByCourier(resolved.courier.id, 50);
+
+    if (!history.length) {
+      stateManager.setUserState(telegramId, AdminState.ADMIN_EDIT_COURIER_ACTION_SELECTING);
+      await bot.sendMessage(
+        chatId,
+        `История сессий курьера <b>${escapeHtml(resolved.courier.fullName)}</b> пуста.`,
+        { parse_mode: "HTML" },
+      );
+      await sendCourierActionsMessage(chatId, resolved.courier, false);
+      return;
+    }
+
+    stateManager.setUserState(telegramId, AdminState.ADMIN_COURIER_HISTORY_AWAITING_FULL);
+
+    await bot.sendMessage(
+      chatId,
+      [
+        "История сессий курьера",
+        "",
+        formatCourierHistoryRows(history),
+        "",
+        "Если хотите увидеть полную историю, напишите ДА, если хотите выйти, напишите /cancel",
+      ].join("\n"),
+      { parse_mode: "HTML" },
+    );
+  });
+
+  bot.onText(/^\/superadmin_courier_history(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора курьера через /superadmin_edit_couriers.",
+      );
+      return;
+    }
+
+    const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    if ((tempData.adminPermissionsLevel ?? 0) < 2) {
+      await bot.sendMessage(chatId, "🚫 Нет прав на эту команду.");
+      return;
+    }
+
+    const resolved = await tryResolveSelectedEditCourier(
+      telegramId,
+      chatId,
+      "/superadmin_edit_couriers",
+    );
+    if (!resolved) {
+      return;
+    }
+
+    const history = await sessionRepository.getHistoryByCourier(resolved.courier.id, 50);
+
+    if (!history.length) {
+      stateManager.setUserState(telegramId, AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING);
+      await bot.sendMessage(
+        chatId,
+        `История сессий курьера <b>${escapeHtml(resolved.courier.fullName)}</b> пуста.`,
+        { parse_mode: "HTML" },
+      );
+      await sendCourierActionsMessage(chatId, resolved.courier, true);
+      return;
+    }
+
+    stateManager.setUserState(telegramId, AdminState.SUPERADMIN_COURIER_HISTORY_AWAITING_FULL);
+
+    await bot.sendMessage(
+      chatId,
+      [
+        "История сессий курьера",
+        "",
+        formatCourierHistoryRows(history),
+        "",
+        "Если хотите увидеть полную историю, напишите ДА, если хотите выйти, напишите /cancel",
+      ].join("\n"),
+      { parse_mode: "HTML" },
+    );
+  });
+
   bot.on("message", async (msg) => {
     const chatId = msg.chat.id;
     const telegramId = msg.from?.id;
@@ -1871,7 +2378,15 @@ export function registerAdminModeCommands(
       currentState !== AdminState.SIM_INTERACTION_ACTION_SELECTING &&
       currentState !== AdminState.SIM_INTERACTION_AWAITING_ACTIVE_STATUS &&
       currentState !== AdminState.SIM_INTERACTION_AWAITING_CONDITION_STATUS &&
-      currentState !== AdminState.SIM_INTERACTION_AWAITING_DELETE_CONFIRM
+      currentState !== AdminState.SIM_INTERACTION_AWAITING_DELETE_CONFIRM &&
+      currentState !== AdminState.ADMIN_EDIT_COURIERS_SELECTING &&
+      currentState !== AdminState.SUPERADMIN_EDIT_COURIERS_SELECTING &&
+      currentState !== AdminState.ADMIN_EDIT_COURIER_ACTION_SELECTING &&
+      currentState !== AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING &&
+      currentState !== AdminState.ADMIN_EDIT_COURIER_AWAITING_STATUS &&
+      currentState !== AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_STATUS &&
+      currentState !== AdminState.ADMIN_COURIER_HISTORY_AWAITING_FULL &&
+      currentState !== AdminState.SUPERADMIN_COURIER_HISTORY_AWAITING_FULL
     ) {
       return;
     }
@@ -3247,6 +3762,201 @@ export function registerAdminModeCommands(
 
       await bot.sendMessage(chatId, "✅ СИМ успешно удален.");
       await sendSimSelectionMessage(chatId, refreshedDevices);
+      return;
+    }
+
+    if (
+      currentState === AdminState.ADMIN_EDIT_COURIERS_SELECTING ||
+      currentState === AdminState.SUPERADMIN_EDIT_COURIERS_SELECTING
+    ) {
+      const isSuperadmin = currentState === AdminState.SUPERADMIN_EDIT_COURIERS_SELECTING;
+      const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const couriers = tempData.editCouriers;
+
+      if (!couriers?.length) {
+        restoreToAuthenticatedWithAdminContext(
+          telegramId,
+          tempData,
+          tempData.editCouriersReturnState,
+        );
+        await bot.sendMessage(
+          chatId,
+          `❌ Что-то пошло не так. Запустите ${isSuperadmin ? "/superadmin_edit_couriers" : "/admin_edit_couriers"} заново.`,
+        );
+        return;
+      }
+
+      if (!/^\d+$/.test(text.trim())) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Введите корректный номер курьера из списка.",
+        );
+        return;
+      }
+
+      const index = parseInt(text.trim(), 10) - 1;
+      if (index < 0 || index >= couriers.length) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Курьер с таким номером не найден. Введите номер из списка.",
+        );
+        return;
+      }
+
+      const selectedCourier = couriers[index];
+      const nextState = isSuperadmin
+        ? AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING
+        : AdminState.ADMIN_EDIT_COURIER_ACTION_SELECTING;
+
+      stateManager.setUserState(telegramId, nextState);
+      stateManager.setUserTempData(telegramId, {
+        selectedEditCourierId: selectedCourier.id,
+      });
+
+      await sendCourierActionsMessage(chatId, selectedCourier, isSuperadmin);
+      return;
+    }
+
+    if (
+      currentState === AdminState.ADMIN_EDIT_COURIER_ACTION_SELECTING ||
+      currentState === AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING
+    ) {
+      const isSuperadmin = currentState === AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING;
+      const statusCmd = isSuperadmin ? "/superadmin_edit_courier_status" : "/admin_edit_courier_status";
+      const historyCmd = isSuperadmin ? "/superadmin_courier_history" : "/admin_courier_history";
+      await bot.sendMessage(
+        chatId,
+        `ℹ️ Выберите действие командой: ${statusCmd} или ${historyCmd}.\n\n/cancel - вернуться к списку курьеров.`,
+      );
+      return;
+    }
+
+    if (
+      currentState === AdminState.ADMIN_EDIT_COURIER_AWAITING_STATUS ||
+      currentState === AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_STATUS
+    ) {
+      const isSuperadmin = currentState === AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_STATUS;
+      const status = parseAdminStatusInput(text);
+      if (status === null) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Некорректный выбор статуса. Введите 1 (Активный) или 2 (Отключен).",
+        );
+        return;
+      }
+
+      const commandHint = isSuperadmin ? "/superadmin_edit_couriers" : "/admin_edit_couriers";
+      const resolved = await tryResolveSelectedEditCourier(telegramId, chatId, commandHint);
+      if (!resolved) {
+        return;
+      }
+
+      const updated = await courierRepository.updateActiveStatus(resolved.courier.id, status);
+      if (!updated) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Не удалось изменить статус курьера.",
+        );
+        return;
+      }
+
+      const refreshedRow = await courierRepository.findById(resolved.courier.id);
+      if (!refreshedRow) {
+        await bot.sendMessage(
+          chatId,
+          `❌ Курьер не найден. Запустите ${commandHint} заново.`,
+        );
+        return;
+      }
+
+      const refreshedCourier: EditableCourierSessionItem = {
+        id: refreshedRow.id,
+        fullName: refreshedRow.full_name,
+        nickname: refreshedRow.nickname,
+        phoneNumber: refreshedRow.phone_number,
+        warehouseId: refreshedRow.warehouse_id,
+        isActive: refreshedRow.is_active,
+      };
+
+      const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const updatedList = (tempData.editCouriers || []).map((c) =>
+        c.id === refreshedCourier.id ? refreshedCourier : c,
+      );
+
+      const nextState = isSuperadmin
+        ? AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING
+        : AdminState.ADMIN_EDIT_COURIER_ACTION_SELECTING;
+
+      stateManager.setUserState(telegramId, nextState);
+      stateManager.setUserTempData(telegramId, {
+        editCouriers: updatedList,
+      });
+
+      await bot.sendMessage(
+        chatId,
+        `✅ Статус курьера изменен на <b>${refreshedCourier.isActive ? "Активный" : "Отключен"}</b>.`,
+        { parse_mode: "HTML" },
+      );
+      await sendCourierActionsMessage(chatId, refreshedCourier, isSuperadmin);
+      return;
+    }
+
+    if (
+      currentState === AdminState.ADMIN_COURIER_HISTORY_AWAITING_FULL ||
+      currentState === AdminState.SUPERADMIN_COURIER_HISTORY_AWAITING_FULL
+    ) {
+      const isSuperadmin = currentState === AdminState.SUPERADMIN_COURIER_HISTORY_AWAITING_FULL;
+      const normalized = text.trim();
+
+      if (normalized.toLowerCase() === "нет") {
+        const commandHint = isSuperadmin ? "/superadmin_edit_couriers" : "/admin_edit_couriers";
+        const resolved = await tryResolveSelectedEditCourier(telegramId, chatId, commandHint);
+        const nextState = isSuperadmin
+          ? AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING
+          : AdminState.ADMIN_EDIT_COURIER_ACTION_SELECTING;
+        stateManager.setUserState(telegramId, nextState);
+        if (resolved) {
+          await sendCourierActionsMessage(chatId, resolved.courier, isSuperadmin);
+        }
+        return;
+      }
+
+      if (normalized !== "ДА") {
+        await bot.sendMessage(
+          chatId,
+          "❌ Некорректный ввод. Напишите ДА для полной истории или /cancel для возврата.",
+        );
+        return;
+      }
+
+      const commandHint = isSuperadmin ? "/superadmin_edit_couriers" : "/admin_edit_couriers";
+      const resolved = await tryResolveSelectedEditCourier(telegramId, chatId, commandHint);
+      if (!resolved) {
+        return;
+      }
+
+      const fullHistory = await sessionRepository.getHistoryByCourier(resolved.courier.id);
+      const nextState = isSuperadmin
+        ? AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING
+        : AdminState.ADMIN_EDIT_COURIER_ACTION_SELECTING;
+      stateManager.setUserState(telegramId, nextState);
+
+      if (!fullHistory.length) {
+        await bot.sendMessage(
+          chatId,
+          `История сессий курьера <b>${escapeHtml(resolved.courier.fullName)}</b> пуста.`,
+          { parse_mode: "HTML" },
+        );
+      } else {
+        const historyText = formatCourierHistoryRows(fullHistory);
+        await bot.sendMessage(
+          chatId,
+          `Полная история сессий курьера <b>${escapeHtml(resolved.courier.fullName)}</b>:\n\n${historyText}`,
+          { parse_mode: "HTML" },
+        );
+      }
+
+      await sendCourierActionsMessage(chatId, resolved.courier, isSuperadmin);
       return;
     }
 
