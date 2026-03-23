@@ -27,6 +27,16 @@ export interface ActiveWarehouseSessionView {
     startDate: Date;
 }
 
+export interface WarehouseSessionHistoryView {
+    courierFullName: string;
+    deviceLabel: string;
+    startDate: Date;
+    endDate: Date | null;
+    simStatusAfter: string | null;
+    statusComment: string | null;
+    isActive: boolean;
+}
+
 export class SessionService {
     private courierService: CourierService;
     private sessionRepo: SessionRepository;
@@ -158,6 +168,31 @@ export class SessionService {
                 ? 'Личный'
                 : (session.device_number || 'без номера').toUpperCase(),
             startDate: session.start_date
+        }));
+    }
+
+    /** Получает историю сессий склада по диапазону даты начала (UTC-границы дня) */
+    public async getSessionsHistoryByWarehouseAndStartDateRange(
+        warehouseId: number,
+        startDateFromUtc: Date,
+        startDateToUtc: Date,
+    ): Promise<WarehouseSessionHistoryView[]> {
+        const sessions = await this.sessionRepo.getHistoryByWarehouseAndStartDateRange(
+            warehouseId,
+            startDateFromUtc,
+            startDateToUtc,
+        );
+
+        return sessions.map((session) => ({
+            courierFullName: session.courier_full_name,
+            deviceLabel: session.device_is_personal
+                ? 'Личный'
+                : (session.device_number || 'без номера').toUpperCase(),
+            startDate: session.start_date,
+            endDate: session.end_date,
+            simStatusAfter: session.sim_status_after,
+            statusComment: session.status_comment,
+            isActive: session.is_active,
         }));
     }
 }

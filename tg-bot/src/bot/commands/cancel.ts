@@ -372,6 +372,28 @@ export function registerCancelCommand(
             return;
         }
 
+        const isSessionsHistoryDateState = currentState === AdminState.ADMIN_SESSIONS_HISTORY_AWAITING_DATE;
+        if (isSessionsHistoryDateState) {
+            const tempData = stateManager.getUserTempData<{
+                adminId?: number;
+                adminPermissionsLevel?: number;
+                sessionsHistoryReturnState?: string;
+            }>(userId);
+
+            const adminId = tempData?.adminId;
+            const adminPermissionsLevel = tempData?.adminPermissionsLevel;
+            const returnState = tempData?.sessionsHistoryReturnState || AdminState.AUTHENTICATED;
+
+            stateManager.setUserState(userId, returnState);
+            stateManager.resetUserTempData(userId);
+            if (adminId && adminPermissionsLevel) {
+                stateManager.setUserTempData(userId, { adminId, adminPermissionsLevel });
+            }
+
+            await bot.sendMessage(chatId, '❌ Просмотр истории сессий отменен. Вы возвращены в предыдущее состояние.');
+            return;
+        }
+
         const isSimInteractionsSelectingState = currentState === AdminState.SIM_INTERACTIONS_SELECTING;
         if (isSimInteractionsSelectingState) {
             const tempData = stateManager.getUserTempData<{

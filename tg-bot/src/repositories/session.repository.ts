@@ -65,6 +65,19 @@ export interface ActiveSessionByWarehouseRecord {
     device_is_personal: boolean;
 }
 
+export interface SessionHistoryByWarehouseRecord {
+    id: number;
+    warehouse_id: number;
+    start_date: Date;
+    end_date: Date | null;
+    sim_status_after: string | null;
+    status_comment: string | null;
+    is_active: boolean;
+    courier_full_name: string;
+    device_number: string | null;
+    device_is_personal: boolean;
+}
+
 export interface SessionHistoryByCourierRecord {
     start_date: Date;
     end_date: Date | null;
@@ -215,6 +228,41 @@ export class SessionRepository {
         `;
 
         const { rows } = await this.db.query<ActiveSessionByWarehouseRecord>(query, [warehouseId]);
+        return rows;
+    }
+
+    public async getHistoryByWarehouseAndStartDateRange(
+        warehouseId: number,
+        startDateFromUtc: Date,
+        startDateToUtc: Date,
+    ): Promise<SessionHistoryByWarehouseRecord[]> {
+        const query = `
+            SELECT
+                s.id,
+                s.warehouse_id,
+                s.start_date,
+                s.end_date,
+                s.sim_status_after,
+                s.status_comment,
+                s.is_active,
+                c.full_name AS courier_full_name,
+                d.device_number,
+                d.is_personal AS device_is_personal
+            FROM session s
+            INNER JOIN couriers c ON c.id = s.courier_id
+            INNER JOIN mobility_devices d ON d.id = s.device_id
+            WHERE s.warehouse_id = $1
+              AND s.start_date >= $2
+              AND s.start_date < $3
+            ORDER BY s.start_date DESC, s.id DESC
+        `;
+
+        const { rows } = await this.db.query<SessionHistoryByWarehouseRecord>(query, [
+            warehouseId,
+            startDateFromUtc.toISOString(),
+            startDateToUtc.toISOString(),
+        ]);
+
         return rows;
     }
 

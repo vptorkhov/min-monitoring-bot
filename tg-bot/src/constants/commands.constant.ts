@@ -33,6 +33,7 @@ export const BOT_COMMANDS = [
     '/admin_apply_registrations',
     '/admin_add_sim',
     '/admin_active_sessions',
+    '/admin_sessions_history',
     '/admin_sim_interactions',
     '/admin_sim_change_active',
     '/admin_sim_change_status',

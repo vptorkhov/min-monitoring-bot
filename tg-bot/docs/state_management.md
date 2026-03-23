@@ -107,6 +107,7 @@ Middleware прикрепляется через `bot.on('message', middleware)`
 - `admin_edit_admin_awaiting_password` — ожидание нового пароля администратора.
 - `admin_apply_registrations_selecting` — ожидание номера курьера в сценарии `/admin_apply_registrations`.
 - `admin_apply_registration_awaiting_confirm` — ожидание ответа `Да`/`Нет` для подтверждения принятия регистрации курьера.
+- `admin_sessions_history_awaiting_date` — ожидание даты `ДД.ММ.ГГГГ` в сценарии `/admin_sessions_history`.
 - `admin_sim_interactions_selecting` — ожидание выбора СИМ в сценарии `/admin_sim_interactions`.
 - `admin_sim_interaction_action_selecting` — ожидание выбора действия для выбранного СИМ.
 - `admin_sim_interaction_awaiting_active_status` — ожидание нового статуса активности СИМ.
@@ -134,6 +135,7 @@ Middleware прикрепляется через `bot.on('message', middleware)`
 - `/admin_set_warehouse` запускает выбор склада для авторизованного админа: показать список активных складов -> ожидать номер -> при успехе сохранить `admins.warehouse_id` и перевести в `admin_authenticated_with_warehouse`;
 - `/admin_clear_warehouse` доступна только в состоянии с выбранным складом; очищает `admins.warehouse_id` и возвращает в `admin_authenticated`;
 - `/admin_active_sessions` показывает активные сессии выбранного склада в формате `ФИО - СИМ` (для личного устройства используется `Личный`), не запускает отдельный поддиалог и после вывода результата возвращает пользователя в состояние, из которого была вызвана команда;
+- `/admin_sessions_history` запускает одношаговый сценарий запроса даты (`ДД.ММ.ГГГГ`) и показывает историю сессий выбранного склада за выбранный московский день; в выборку входят активные и завершенные сессии, у которых `start_date` попадает в этот день; после показа результата пользователь возвращается в исходное состояние;
 - `/admin_sim_interactions` запускает выбор СИМ выбранного склада (без личного транспорта), далее доступны действия `/admin_sim_change_active`, `/admin_sim_change_status`, `/admin_sim_story`, `/admin_sim_delete` только в рамках выбранного СИМ;
 - `/admin_sim_change_active` и `/admin_sim_change_status` недоступны, если по выбранному СИМ есть активная сессия;
 - при установке статуса исправности `broken` через `/admin_sim_change_status` дополнительно устанавливается `is_active=false`;
@@ -181,6 +183,7 @@ Middleware прикрепляется через `bot.on('message', middleware)`
     `/admin_apply_registrations`.
 - `/cancel` в `/admin_change_password` возвращает пользователя в `admin_authenticated`.
 - `/cancel` в `/admin_set_warehouse` возвращает пользователя в состояние, из которого был запущен выбор склада.
+- `/cancel` в `/admin_sessions_history` на этапе ввода даты возвращает пользователя в состояние, из которого была вызвана команда.
 - `/cancel` в `/admin_sim_interactions` на этапе выбора СИМ (где бот подсказывает `/cancel - вернуться в состояние выбранного склада`) возвращает в `admin_authenticated_with_warehouse`, а в подэтапах действий/изменений/удаления (где бот подсказывает `/cancel - вернуться к списку СИМ`) возвращает к обновленному списку СИМ.
 - `/cancel` в `/admin_edit_couriers` и `/superadmin_edit_couriers` работает контекстно:
   - на этапе выбора номера курьера возвращает в состояние до запуска базовой команды;

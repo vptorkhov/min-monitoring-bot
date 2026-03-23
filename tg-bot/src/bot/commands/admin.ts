@@ -44,6 +44,8 @@ type AdminSessionData = {
   selectedApplyCourierId?: number;
   applyRegistrationsReturnState?: string;
   addSimWarehouseId?: number;
+  sessionsHistoryReturnState?: string;
+  sessionsHistoryWarehouseId?: number;
   simInteractionWarehouseId?: number;
   simInteractionDevices?: SimInteractionSessionItem[];
   selectedSimInteractionDeviceId?: number;
@@ -166,6 +168,7 @@ function getAuthenticatedAdminWelcomeMessage(
         "/admin_clear_warehouse",
         "/admin_add_sim",
         "/admin_active_sessions",
+        "/admin_sessions_history",
         "/admin_sim_interactions",
         "/admin_edit_couriers",
       ]
@@ -301,6 +304,59 @@ function formatMoscowTime(date: Date | null): string {
   }).format(new Date(date));
 }
 
+function formatMoscowDateTime(date: Date | null): string {
+  if (!date) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(date));
+}
+
+function parseMoscowDateRangeInput(
+  input: string,
+): { displayDate: string; startUtc: Date; endUtc: Date } | null {
+  const match = input.trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!match) {
+    return null;
+  }
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+
+  if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) {
+    return null;
+  }
+
+  const checkDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    checkDate.getUTCFullYear() !== year ||
+    checkDate.getUTCMonth() !== month - 1 ||
+    checkDate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  // Пользователь вводит московскую дату; переводим границы дня в UTC.
+  const moscowOffsetMs = 3 * 60 * 60 * 1000;
+  const startUtcMs = Date.UTC(year, month - 1, day, 0, 0, 0, 0) - moscowOffsetMs;
+  const endUtcMs = startUtcMs + 24 * 60 * 60 * 1000;
+
+  return {
+    displayDate: `${match[1]}.${match[2]}.${match[3]}`,
+    startUtc: new Date(startUtcMs),
+    endUtc: new Date(endUtcMs),
+  };
+}
+
 function formatSimHistoryRows(history: SessionHistoryByDeviceRecord[]): string {
   return history
     .map((row, index) => {
@@ -345,6 +401,35 @@ function formatActiveSessionsByWarehouseRows(
         `${index + 1}. <b>${escapeHtml(session.courierFullName)}</b> - <b>${escapeHtml(session.deviceLabel)}</b>`,
     )
     .join("\n");
+}
+
+function formatSessionsHistoryByWarehouseRows(
+  sessions: {
+    courierFullName: string;
+    deviceLabel: string;
+    startDate: Date;
+    endDate: Date | null;
+    simStatusAfter: string | null;
+    statusComment: string | null;
+  }[],
+): string {
+  return sessions
+    .map((session, index) => {
+      const statusText = session.simStatusAfter
+        ? getSimConditionStatusText(session.simStatusAfter)
+        : "-";
+      const commentText = (session.statusComment || "").trim() || "-";
+
+      return [
+        `${index + 1}. <b>${escapeHtml(session.courierFullName)}</b>`,
+        `СИМ: <b>${escapeHtml(session.deviceLabel)}</b>`,
+        `Дата начала: <b>${formatMoscowDateTime(session.startDate)}</b>`,
+        `Дата конца: <b>${formatMoscowDateTime(session.endDate)}</b>`,
+        `Статус СИМ после сессии: <b>${escapeHtml(statusText)}</b>`,
+        `Комментарий состояния: <b>${escapeHtml(commentText)}</b>`,
+      ].join("\n");
+    })
+    .join("\n\n");
 }
 
 async function restoreCourierFlowAfterExitAdmin(
@@ -412,6 +497,7 @@ export function registerAdminModeCommands(
       currentState === AdminState.EDIT_ADMIN_AWAITING_PASSWORD ||
       currentState === AdminState.APPLY_REGISTRATIONS_SELECTING ||
       currentState === AdminState.APPLY_REGISTRATION_AWAITING_CONFIRM ||
+      currentState === AdminState.ADMIN_SESSIONS_HISTORY_AWAITING_DATE ||
       currentState === AdminState.ADD_SIM_AWAITING_NUMBER ||
       currentState === AdminState.SIM_INTERACTIONS_SELECTING ||
       currentState === AdminState.SIM_INTERACTION_ACTION_SELECTING ||
@@ -1019,6 +1105,7 @@ export function registerAdminModeCommands(
       currentState === AdminState.EDIT_ADMIN_AWAITING_PASSWORD ||
       currentState === AdminState.APPLY_REGISTRATIONS_SELECTING ||
       currentState === AdminState.APPLY_REGISTRATION_AWAITING_CONFIRM ||
+      currentState === AdminState.ADMIN_SESSIONS_HISTORY_AWAITING_DATE ||
       currentState === AdminState.ADD_SIM_AWAITING_NUMBER ||
       currentState === AdminState.SIM_INTERACTIONS_SELECTING ||
       currentState === AdminState.SIM_INTERACTION_ACTION_SELECTING ||
@@ -1887,6 +1974,75 @@ export function registerAdminModeCommands(
     }
   });
 
+  bot.onText(/^\/admin_sessions_history(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "ℹ️ Сначала войдите в админский режим командой /admin.",
+      );
+      return;
+    }
+
+    const currentState = stateManager.getUserState(telegramId);
+    if (!isInAuthenticatedOrSubflow(currentState)) {
+      await bot.sendMessage(
+        chatId,
+        "🔒 Эта команда доступна только авторизованному администратору. Используйте /admin_login.",
+      );
+      return;
+    }
+
+    const tempData =
+      stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    if (!tempData.adminId || !tempData.adminPermissionsLevel) {
+      stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+      await bot.sendMessage(
+        chatId,
+        "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
+      );
+      return;
+    }
+
+    const warehouseId = await adminService.getAdminWarehouseId(tempData.adminId);
+    if (warehouseId === undefined) {
+      stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+      await bot.sendMessage(
+        chatId,
+        "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
+      );
+      return;
+    }
+
+    if (warehouseId === null) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда доступна только если выбран склад. Используйте /admin_set_warehouse.",
+      );
+      return;
+    }
+
+    stateManager.setUserState(
+      telegramId,
+      AdminState.ADMIN_SESSIONS_HISTORY_AWAITING_DATE,
+    );
+    stateManager.setUserTempData(telegramId, {
+      sessionsHistoryReturnState: currentState || AdminState.AUTHENTICATED,
+      sessionsHistoryWarehouseId: warehouseId,
+    });
+
+    await bot.sendMessage(
+      chatId,
+      "Введите дату в формате ДД.ММ.ГГГГ для просмотра истории сессий",
+    );
+  });
+
   bot.onText(/^\/admin_sim_interactions(?:@\w+)?$/, async (msg) => {
     const chatId = msg.chat.id;
     const telegramId = msg.from?.id;
@@ -2465,6 +2621,7 @@ export function registerAdminModeCommands(
       currentState !== AdminState.EDIT_ADMIN_AWAITING_PASSWORD &&
       currentState !== AdminState.APPLY_REGISTRATIONS_SELECTING &&
       currentState !== AdminState.APPLY_REGISTRATION_AWAITING_CONFIRM &&
+      currentState !== AdminState.ADMIN_SESSIONS_HISTORY_AWAITING_DATE &&
       currentState !== AdminState.ADD_SIM_AWAITING_NUMBER &&
       currentState !== AdminState.SIM_INTERACTIONS_SELECTING &&
       currentState !== AdminState.SIM_INTERACTION_ACTION_SELECTING &&
@@ -3449,6 +3606,98 @@ export function registerAdminModeCommands(
         selectedApplyCourierId: undefined,
       });
       await sendPendingCourierApprovalsListMessage(chatId, refreshed);
+      return;
+    }
+
+    if (currentState === AdminState.ADMIN_SESSIONS_HISTORY_AWAITING_DATE) {
+      const tempData =
+        stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const adminId = tempData.adminId;
+      const adminPermissionsLevel = tempData.adminPermissionsLevel;
+
+      if (!adminId || !adminPermissionsLevel) {
+        stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+        stateManager.resetUserTempData(telegramId);
+        await bot.sendMessage(
+          chatId,
+          "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
+        );
+        return;
+      }
+
+      let warehouseId = tempData.sessionsHistoryWarehouseId;
+      if (!warehouseId) {
+        const resolvedWarehouseId = await adminService.getAdminWarehouseId(adminId);
+        if (resolvedWarehouseId === undefined) {
+          stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+          stateManager.resetUserTempData(telegramId);
+          stateManager.setUserTempData(telegramId, {
+            adminId,
+            adminPermissionsLevel,
+          });
+          await bot.sendMessage(
+            chatId,
+            "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
+          );
+          return;
+        }
+
+        if (resolvedWarehouseId === null) {
+          const returnState =
+            tempData.sessionsHistoryReturnState || AdminState.AUTHENTICATED;
+          stateManager.setUserState(telegramId, returnState);
+          stateManager.resetUserTempData(telegramId);
+          stateManager.setUserTempData(telegramId, {
+            adminId,
+            adminPermissionsLevel,
+          });
+          await bot.sendMessage(
+            chatId,
+            "❌ Команда доступна только если выбран склад. Используйте /admin_set_warehouse.",
+          );
+          return;
+        }
+
+        warehouseId = resolvedWarehouseId;
+      }
+
+      const parsedDateRange = parseMoscowDateRangeInput(text.trim());
+      if (!parsedDateRange) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Некорректная дата. Используйте формат ДД.ММ.ГГГГ (например, 24.03.2026).\n\nВведите дату в формате ДД.ММ.ГГГГ для просмотра истории сессий",
+        );
+        return;
+      }
+
+      const history = await sessionService.getSessionsHistoryByWarehouseAndStartDateRange(
+        warehouseId,
+        parsedDateRange.startUtc,
+        parsedDateRange.endUtc,
+      );
+
+      const returnState =
+        tempData.sessionsHistoryReturnState || AdminState.AUTHENTICATED;
+      stateManager.setUserState(telegramId, returnState);
+      stateManager.resetUserTempData(telegramId);
+      stateManager.setUserTempData(telegramId, {
+        adminId,
+        adminPermissionsLevel,
+      });
+
+      if (!history.length) {
+        await bot.sendMessage(
+          chatId,
+          `ℹ️ За ${parsedDateRange.displayDate} по выбранному складу сессии не найдены.`,
+        );
+        return;
+      }
+
+      await bot.sendMessage(
+        chatId,
+        `История сессий выбранного склада за ${parsedDateRange.displayDate}:\n\n${formatSessionsHistoryByWarehouseRows(history)}`,
+        { parse_mode: "HTML" },
+      );
       return;
     }
 
