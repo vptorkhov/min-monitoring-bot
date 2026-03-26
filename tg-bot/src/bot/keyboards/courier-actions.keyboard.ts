@@ -18,9 +18,10 @@ export const getSelectWarehouseKeyboard = (): TelegramBot.ReplyKeyboardMarkup =>
 export const getCourierIdleKeyboard = (): TelegramBot.ReplyKeyboardMarkup => {
     return {
         keyboard: [
-            [{ text: KEYBOARD_BUTTON_TEXT.TAKE_SIM }],
-            [{ text: KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE }],
-            [{ text: KEYBOARD_BUTTON_TEXT.CLEAR_WAREHOUSE }]
+            [{ text: KEYBOARD_BUTTON_TEXT.TAKE_SIM }]
+            // TEMP: кнопки выбора/отвязки склада отключены для этапа, когда склад уже выбран.
+            // [{ text: KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE }],
+            // [{ text: KEYBOARD_BUTTON_TEXT.CLEAR_WAREHOUSE }]
         ],
         resize_keyboard: true,
         one_time_keyboard: false
@@ -44,9 +45,10 @@ export const getCourierActiveSessionKeyboard = (): TelegramBot.ReplyKeyboardMark
 export const getCourierMainInlineKeyboard = (): TelegramBot.InlineKeyboardMarkup => {
     return {
         inline_keyboard: [
-            [{ text: KEYBOARD_BUTTON_TEXT.TAKE_SIM, callback_data: INLINE_CALLBACK_DATA.TAKE_SIM }],
-            [{ text: KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE, callback_data: INLINE_CALLBACK_DATA.SET_WAREHOUSE }],
-            [{ text: KEYBOARD_BUTTON_TEXT.CLEAR_WAREHOUSE, callback_data: INLINE_CALLBACK_DATA.CLEAR_WAREHOUSE }]
+            [{ text: KEYBOARD_BUTTON_TEXT.TAKE_SIM, callback_data: INLINE_CALLBACK_DATA.TAKE_SIM }]
+            // TEMP: кнопки выбора/отвязки склада отключены для этапа, когда склад уже выбран.
+            // [{ text: KEYBOARD_BUTTON_TEXT.SELECT_WAREHOUSE, callback_data: INLINE_CALLBACK_DATA.SET_WAREHOUSE }],
+            // [{ text: KEYBOARD_BUTTON_TEXT.CLEAR_WAREHOUSE, callback_data: INLINE_CALLBACK_DATA.CLEAR_WAREHOUSE }]
         ]
     };
 };
