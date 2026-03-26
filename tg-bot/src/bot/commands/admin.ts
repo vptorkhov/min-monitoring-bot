@@ -383,8 +383,8 @@ function formatSimHistoryRows(history: SessionHistoryByDeviceRecord[]): string {
 function formatCourierHistoryRows(history: SessionHistoryByCourierRecord[]): string {
   return history
     .map((row, index) => {
-      const start = formatMoscowTime(row.start_date);
-      const end = row.end_date ? formatMoscowTime(row.end_date) : "-";
+      const start = formatMoscowDateTime(row.start_date);
+      const end = row.end_date ? formatMoscowDateTime(row.end_date) : "-";
       const deviceNumber = escapeHtml((row.device_number || "-").toUpperCase());
 
       return `${index + 1}. <b>${deviceNumber}</b> начало:<b>${start}</b> конец:<b>${end}</b>`;
