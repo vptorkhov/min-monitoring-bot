@@ -17,6 +17,10 @@ import {
   exitAdminMode,
   isUserInAdminMode,
 } from "../admin/admin-mode";
+import {
+  getAdminCommandListMessage,
+  isAuthenticatedAdminState,
+} from "../admin/admin-command-hints";
 import { sendCourierMainKeyboard } from "../keyboards/courier-main-keyboard";
 import { stateManager } from "../state-manager";
 import { isCommand } from "../../constants/commands.constant";
@@ -160,53 +164,7 @@ function getAuthenticatedAdminWelcomeMessage(
   adminPermissionsLevel: number,
   isWarehouseSelected: boolean,
 ): string {
-  const warehouseCommands = isWarehouseSelected
-    ? [
-        "",
-        "Команды выбранного склада:",
-        "/admin_set_warehouse",
-        "/admin_clear_warehouse",
-        "/admin_add_sim",
-        "/admin_active_sessions",
-        "/admin_sessions_history",
-        "/admin_sim_interactions",
-        "/admin_edit_couriers",
-      ]
-    : ["", "Команда выбора склада:", "/admin_set_warehouse"];
-
-  if (adminPermissionsLevel >= 2) {
-    return [
-      "✅ Вы успешно вошли как суперадмин.",
-      "",
-      "Доступные команды:",
-      "/admin_change_password",
-      "/admin_apply_registrations",
-      "/superadmin_create_warehouse",
-      "/superadmin_edit_warehouses",
-      "/superadmin_edit_admins",
-      "/superadmin_edit_couriers",
-      ...warehouseCommands,
-      "",
-      "Общие команды админ-режима:",
-      "/admin_logout",
-      "/exit_admin",
-      "/cancel",
-    ].join("\n");
-  }
-
-  return [
-    "✅ Вы успешно вошли как админ.",
-    "",
-    "Доступные команды:",
-    "/admin_change_password",
-    "/admin_apply_registrations",
-    ...warehouseCommands,
-    "",
-    "Общие команды админ-режима:",
-    "/admin_logout",
-    "/exit_admin",
-    "/cancel",
-  ].join("\n");
+  return getAdminCommandListMessage(adminPermissionsLevel, isWarehouseSelected);
 }
 
 function getSimActiveStatusText(isActive: boolean): string {
@@ -383,8 +341,8 @@ function formatSimHistoryRows(history: SessionHistoryByDeviceRecord[]): string {
 function formatCourierHistoryRows(history: SessionHistoryByCourierRecord[]): string {
   return history
     .map((row, index) => {
-      const start = formatMoscowTime(row.start_date);
-      const end = row.end_date ? formatMoscowTime(row.end_date) : "-";
+      const start = formatMoscowDateTime(row.start_date);
+      const end = row.end_date ? formatMoscowDateTime(row.end_date) : "-";
       const deviceNumber = escapeHtml((row.device_number || "-").toUpperCase());
 
       return `${index + 1}. <b>${deviceNumber}</b> начало:<b>${start}</b> конец:<b>${end}</b>`;
@@ -519,10 +477,13 @@ export function registerAdminModeCommands(
     telegramId: number,
     tempData: AdminSessionData,
     targetState?: string,
-  ) => {
+  ): string => {
+    const resolvedState =
+      targetState || tempData.editReturnState || AdminState.AUTHENTICATED;
+
     stateManager.setUserState(
       telegramId,
-      targetState || tempData.editReturnState || AdminState.AUTHENTICATED,
+      resolvedState,
     );
     stateManager.resetUserTempData(telegramId);
 
@@ -532,6 +493,26 @@ export function registerAdminModeCommands(
         adminPermissionsLevel: tempData.adminPermissionsLevel,
       });
     }
+
+    return resolvedState;
+  };
+
+  const sendAdminCommandsIfNeeded = async (
+    chatId: number,
+    adminPermissionsLevel: number | undefined,
+    state: string,
+  ) => {
+    if (!adminPermissionsLevel || !isAuthenticatedAdminState(state)) {
+      return;
+    }
+
+    await bot.sendMessage(
+      chatId,
+      getAdminCommandListMessage(
+        adminPermissionsLevel,
+        state === AdminState.AUTHENTICATED_WITH_WAREHOUSE,
+      ),
+    );
   };
 
   const sendWarehouseActionsMessage = async (
@@ -1280,6 +1261,11 @@ export function registerAdminModeCommands(
     const warehouses = await warehouseService.getActiveWarehouses();
     if (!warehouses.length) {
       await bot.sendMessage(chatId, "❌ Список активных складов пуст.");
+      await sendAdminCommandsIfNeeded(
+        chatId,
+        tempData.adminPermissionsLevel,
+        currentState || AdminState.AUTHENTICATED,
+      );
       return;
     }
 
@@ -1449,6 +1435,11 @@ export function registerAdminModeCommands(
     const warehouses = await warehouseService.getAllWarehouses();
     if (!warehouses.length) {
       await bot.sendMessage(chatId, "❌ Список складов пуст.");
+      await sendAdminCommandsIfNeeded(
+        chatId,
+        tempData.adminPermissionsLevel,
+        currentState || AdminState.AUTHENTICATED,
+      );
       return;
     }
 
@@ -1505,6 +1496,11 @@ export function registerAdminModeCommands(
     const editableAdmins = await loadEditableAdmins();
     if (!editableAdmins.length) {
       await bot.sendMessage(chatId, "❌ Список администраторов пуст.");
+      await sendAdminCommandsIfNeeded(
+        chatId,
+        tempData.adminPermissionsLevel,
+        currentState || AdminState.AUTHENTICATED,
+      );
       return;
     }
 
@@ -1959,6 +1955,11 @@ export function registerAdminModeCommands(
       );
       if (currentState) {
         stateManager.setUserState(telegramId, currentState);
+        await sendAdminCommandsIfNeeded(
+          chatId,
+          tempData.adminPermissionsLevel,
+          currentState,
+        );
       }
       return;
     }
@@ -1971,6 +1972,11 @@ export function registerAdminModeCommands(
 
     if (currentState) {
       stateManager.setUserState(telegramId, currentState);
+      await sendAdminCommandsIfNeeded(
+        chatId,
+        tempData.adminPermissionsLevel,
+        currentState,
+      );
     }
   });
 
@@ -2112,6 +2118,11 @@ export function registerAdminModeCommands(
       await bot.sendMessage(
         chatId,
         "❌ Список СИМ пуст. Вы возвращены в состояние выбранного склада.",
+      );
+      await sendAdminCommandsIfNeeded(
+        chatId,
+        tempData.adminPermissionsLevel,
+        AdminState.AUTHENTICATED_WITH_WAREHOUSE,
       );
       return;
     }
@@ -2344,6 +2355,11 @@ export function registerAdminModeCommands(
     const couriers = await loadEditableCouriersByWarehouse(warehouseId);
     if (!couriers.length) {
       await bot.sendMessage(chatId, "❌ Список курьеров выбранного склада пуст.");
+      await sendAdminCommandsIfNeeded(
+        chatId,
+        tempData.adminPermissionsLevel,
+        currentState || AdminState.AUTHENTICATED,
+      );
       return;
     }
 
@@ -2393,6 +2409,11 @@ export function registerAdminModeCommands(
     const couriers = await loadAllEditableCouriers();
     if (!couriers.length) {
       await bot.sendMessage(chatId, "❌ Список курьеров пуст.");
+      await sendAdminCommandsIfNeeded(
+        chatId,
+        tempData.adminPermissionsLevel,
+        currentState || AdminState.AUTHENTICATED,
+      );
       return;
     }
 
@@ -3000,6 +3021,11 @@ export function registerAdminModeCommands(
         `✅ Успешно создан склад *${warehouse.name}* по адресу *${warehouse.address}*`,
         { parse_mode: "Markdown" },
       );
+      await sendAdminCommandsIfNeeded(
+        chatId,
+        adminPermissionsLevel,
+        authenticatedState,
+      );
       return;
     }
 
@@ -3009,10 +3035,15 @@ export function registerAdminModeCommands(
       const admins = tempData.editAdmins;
 
       if (!admins?.length) {
-        restoreToAuthenticatedWithAdminContext(telegramId, tempData);
+        const restoredState = restoreToAuthenticatedWithAdminContext(telegramId, tempData);
         await bot.sendMessage(
           chatId,
           "❌ Что-то пошло не так. Запустите /superadmin_edit_admins заново.",
+        );
+        await sendAdminCommandsIfNeeded(
+          chatId,
+          tempData.adminPermissionsLevel,
+          restoredState,
         );
         return;
       }
@@ -3061,10 +3092,15 @@ export function registerAdminModeCommands(
       const warehouses = tempData.editWarehouses;
 
       if (!warehouses?.length) {
-        restoreToAuthenticatedWithAdminContext(telegramId, tempData);
+        const restoredState = restoreToAuthenticatedWithAdminContext(telegramId, tempData);
         await bot.sendMessage(
           chatId,
           "❌ Что-то пошло не так. Запустите /superadmin_edit_warehouses заново.",
+        );
+        await sendAdminCommandsIfNeeded(
+          chatId,
+          tempData.adminPermissionsLevel,
+          restoredState,
         );
         return;
       }
@@ -3496,7 +3532,7 @@ export function registerAdminModeCommands(
       if (!pendingCouriers?.length) {
         const refreshed = await loadPendingCourierApprovals();
         if (!refreshed.length) {
-          restoreToAuthenticatedWithAdminContext(
+          const restoredState = restoreToAuthenticatedWithAdminContext(
             telegramId,
             tempData,
             tempData.applyRegistrationsReturnState,
@@ -3504,6 +3540,11 @@ export function registerAdminModeCommands(
           await bot.sendMessage(
             chatId,
             "ℹ️ Нет неактивных курьеров без записей о сессиях.",
+          );
+          await sendAdminCommandsIfNeeded(
+            chatId,
+            tempData.adminPermissionsLevel,
+            restoredState,
           );
           return;
         }
@@ -3588,7 +3629,7 @@ export function registerAdminModeCommands(
 
       const refreshed = await loadPendingCourierApprovals();
       if (!refreshed.length) {
-        restoreToAuthenticatedWithAdminContext(
+        const restoredState = restoreToAuthenticatedWithAdminContext(
           telegramId,
           resolved.tempData,
           resolved.tempData.applyRegistrationsReturnState,
@@ -3596,6 +3637,11 @@ export function registerAdminModeCommands(
         await bot.sendMessage(
           chatId,
           "ℹ️ Нет неактивных курьеров без записей о сессиях. Вы возвращены в предыдущее состояние.",
+        );
+        await sendAdminCommandsIfNeeded(
+          chatId,
+          resolved.tempData.adminPermissionsLevel,
+          restoredState,
         );
         return;
       }
@@ -3625,41 +3671,38 @@ export function registerAdminModeCommands(
         return;
       }
 
-      let warehouseId = tempData.sessionsHistoryWarehouseId;
-      if (!warehouseId) {
-        const resolvedWarehouseId = await adminService.getAdminWarehouseId(adminId);
-        if (resolvedWarehouseId === undefined) {
-          stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
-          stateManager.resetUserTempData(telegramId);
-          stateManager.setUserTempData(telegramId, {
-            adminId,
-            adminPermissionsLevel,
-          });
-          await bot.sendMessage(
-            chatId,
-            "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
-          );
-          return;
-        }
-
-        if (resolvedWarehouseId === null) {
-          const returnState =
-            tempData.sessionsHistoryReturnState || AdminState.AUTHENTICATED;
-          stateManager.setUserState(telegramId, returnState);
-          stateManager.resetUserTempData(telegramId);
-          stateManager.setUserTempData(telegramId, {
-            adminId,
-            adminPermissionsLevel,
-          });
-          await bot.sendMessage(
-            chatId,
-            "❌ Команда доступна только если выбран склад. Используйте /admin_set_warehouse.",
-          );
-          return;
-        }
-
-        warehouseId = resolvedWarehouseId;
+      const resolvedWarehouseId = await adminService.getAdminWarehouseId(adminId);
+      if (resolvedWarehouseId === undefined) {
+        stateManager.setUserState(telegramId, AdminState.AUTHENTICATED);
+        stateManager.resetUserTempData(telegramId);
+        stateManager.setUserTempData(telegramId, {
+          adminId,
+          adminPermissionsLevel,
+        });
+        await bot.sendMessage(
+          chatId,
+          "⚠️ Не удалось определить администратора. Выполните /admin_login повторно.",
+        );
+        return;
       }
+
+      if (resolvedWarehouseId === null) {
+        const returnState =
+          tempData.sessionsHistoryReturnState || AdminState.AUTHENTICATED;
+        stateManager.setUserState(telegramId, returnState);
+        stateManager.resetUserTempData(telegramId);
+        stateManager.setUserTempData(telegramId, {
+          adminId,
+          adminPermissionsLevel,
+        });
+        await bot.sendMessage(
+          chatId,
+          "❌ Команда доступна только если выбран склад. Используйте /admin_set_warehouse.",
+        );
+        return;
+      }
+
+      const warehouseId = resolvedWarehouseId;
 
       const parsedDateRange = parseMoscowDateRangeInput(text.trim());
       if (!parsedDateRange) {
@@ -3690,6 +3733,7 @@ export function registerAdminModeCommands(
           chatId,
           `ℹ️ За ${parsedDateRange.displayDate} по выбранному складу сессии не найдены.`,
         );
+        await sendAdminCommandsIfNeeded(chatId, adminPermissionsLevel, returnState);
         return;
       }
 
@@ -3791,6 +3835,11 @@ export function registerAdminModeCommands(
         await bot.sendMessage(
           chatId,
           "❌ Что-то пошло не так. Запустите /admin_sim_interactions заново.",
+        );
+        await sendAdminCommandsIfNeeded(
+          chatId,
+          tempData.adminPermissionsLevel,
+          AdminState.AUTHENTICATED_WITH_WAREHOUSE,
         );
         return;
       }
@@ -4044,9 +4093,27 @@ export function registerAdminModeCommands(
         return;
       }
 
-      const deleted = await mobilityDeviceRepository.deleteById(resolved.device.id);
-      if (!deleted) {
-        await bot.sendMessage(chatId, "❌ Не удалось удалить СИМ.");
+      const deleteResult = await mobilityDeviceRepository.deleteByIdWithSessions(
+        resolved.device.id,
+      );
+      if (deleteResult.blockedByActiveSession) {
+        stateManager.setUserState(
+          telegramId,
+          AdminState.SIM_INTERACTION_ACTION_SELECTING,
+        );
+        await bot.sendMessage(
+          chatId,
+          "❌ Невозможно удалить СИМ: по нему есть активная сессия.",
+        );
+        await sendSimActionsMessage(chatId, resolved.device);
+        return;
+      }
+
+      if (!deleteResult.deleted) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Не удалось удалить СИМ. Попробуйте позже.",
+        );
         return;
       }
 
@@ -4071,6 +4138,11 @@ export function registerAdminModeCommands(
           chatId,
           "✅ СИМ удален. Контекст выбора СИМ сброшен.",
         );
+        await sendAdminCommandsIfNeeded(
+          chatId,
+          tempData.adminPermissionsLevel,
+          AdminState.AUTHENTICATED_WITH_WAREHOUSE,
+        );
         return;
       }
 
@@ -4091,6 +4163,11 @@ export function registerAdminModeCommands(
         await bot.sendMessage(
           chatId,
           "✅ СИМ удален. Список СИМ пуст, вы возвращены в состояние выбранного склада.",
+        );
+        await sendAdminCommandsIfNeeded(
+          chatId,
+          tempData.adminPermissionsLevel,
+          AdminState.AUTHENTICATED_WITH_WAREHOUSE,
         );
         return;
       }
@@ -4115,7 +4192,7 @@ export function registerAdminModeCommands(
       const couriers = tempData.editCouriers;
 
       if (!couriers?.length) {
-        restoreToAuthenticatedWithAdminContext(
+        const restoredState = restoreToAuthenticatedWithAdminContext(
           telegramId,
           tempData,
           tempData.editCouriersReturnState,
@@ -4123,6 +4200,11 @@ export function registerAdminModeCommands(
         await bot.sendMessage(
           chatId,
           `❌ Что-то пошло не так. Запустите ${isSuperadmin ? "/superadmin_edit_couriers" : "/admin_edit_couriers"} заново.`,
+        );
+        await sendAdminCommandsIfNeeded(
+          chatId,
+          tempData.adminPermissionsLevel,
+          restoredState,
         );
         return;
       }

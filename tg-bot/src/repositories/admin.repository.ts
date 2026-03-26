@@ -113,11 +113,15 @@ export class AdminRepository {
     }
 
     async deleteById(adminId: number): Promise<boolean> {
-        const result = await this.db.query(
-            'DELETE FROM admins WHERE id = $1',
-            [adminId]
-        );
+        try {
+            const result = await this.db.query(
+                'DELETE FROM admins WHERE id = $1',
+                [adminId]
+            );
 
-        return (result.rowCount ?? 0) > 0;
+            return (result.rowCount ?? 0) > 0;
+        } catch {
+            return false;
+        }
     }
 }

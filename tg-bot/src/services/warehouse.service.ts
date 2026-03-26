@@ -58,22 +58,29 @@ export class WarehouseService {
 
     // Удалить склад (если отсутствуют связанные сессии)
     public async deleteWarehouse(id: number): Promise<{ success: boolean; reason?: string }> {
-        const hasAnySessions = await this.warehouseRepository.hasAnySessionsByWarehouseId(id);
-        if (hasAnySessions) {
+        try {
+            const hasAnySessions = await this.warehouseRepository.hasAnySessionsByWarehouseId(id);
+            if (hasAnySessions) {
+                return {
+                    success: false,
+                    reason: 'Невозможно удалить склад, так как по нему есть история сессий.'
+                };
+            }
+
+            const deleted = await this.warehouseRepository.deleteWarehouse(id);
+            if (!deleted) {
+                return {
+                    success: false,
+                    reason: 'Склад не найден, уже удален или связан с другими данными.'
+                };
+            }
+
+            return { success: true };
+        } catch {
             return {
                 success: false,
-                reason: 'Невозможно удалить склад, так как по нему есть история сессий.'
+                reason: 'Произошла ошибка при удалении склада. Попробуйте позже.'
             };
         }
-
-        const deleted = await this.warehouseRepository.deleteWarehouse(id);
-        if (!deleted) {
-            return {
-                success: false,
-                reason: 'Склад не найден или уже удален.'
-            };
-        }
-
-        return { success: true };
     }
 }

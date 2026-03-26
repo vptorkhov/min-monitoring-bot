@@ -12,6 +12,7 @@ import {
 import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
 import { blockIfAdminGuestCommandNotAllowed } from '../admin/admin-mode';
 import { AdminState } from '../../constants/states.constant';
+import { getAdminCommandListMessage, isAuthenticatedAdminState } from '../admin/admin-command-hints';
 
 /**
  * Регистрация команды /cancel
@@ -36,6 +37,22 @@ export function registerCancelCommand(
         return admins
             .map((admin, index) => `${index + 1}. ${admin.nickname}`)
             .join('\n');
+    };
+
+    const sendAdminCommandsIfNeeded = async (
+        chatId: number,
+        adminPermissionsLevel: number | undefined,
+        targetState: string | undefined
+    ) => {
+        if (!adminPermissionsLevel || !isAuthenticatedAdminState(targetState)) {
+            return;
+        }
+
+        const isWarehouseSelected = targetState === AdminState.AUTHENTICATED_WITH_WAREHOUSE;
+        await bot.sendMessage(
+            chatId,
+            getAdminCommandListMessage(adminPermissionsLevel, isWarehouseSelected)
+        );
     };
 
     bot.onText(/^\/cancel(?:@\w+)?$/, async (msg) => {
@@ -88,6 +105,7 @@ export function registerCancelCommand(
             }
 
             await bot.sendMessage(chatId, '❌ Выбор склада отменен. Вы возвращены в предыдущее состояние.');
+            await sendAdminCommandsIfNeeded(chatId, adminPermissionsLevel, returnState);
             return;
         }
 
@@ -109,6 +127,11 @@ export function registerCancelCommand(
             }
 
             await bot.sendMessage(chatId, '❌ Создание склада отменено. Вы возвращены в авторизованный админский режим.');
+            await sendAdminCommandsIfNeeded(
+                chatId,
+                adminPermissionsLevel,
+                currentWarehouseId ? AdminState.AUTHENTICATED_WITH_WAREHOUSE : AdminState.AUTHENTICATED
+            );
             return;
         }
 
@@ -129,6 +152,11 @@ export function registerCancelCommand(
             }
 
             await bot.sendMessage(chatId, '❌ Смена пароля отменена. Вы возвращены в авторизованный админский режим.');
+            await sendAdminCommandsIfNeeded(
+                chatId,
+                adminPermissionsLevel,
+                currentWarehouseId ? AdminState.AUTHENTICATED_WITH_WAREHOUSE : AdminState.AUTHENTICATED
+            );
             return;
         }
 
@@ -152,6 +180,7 @@ export function registerCancelCommand(
             }
 
             await bot.sendMessage(chatId, '❌ Редактирование складов отменено. Вы возвращены в предыдущее состояние.');
+            await sendAdminCommandsIfNeeded(chatId, adminPermissionsLevel, returnState);
             return;
         }
 
@@ -201,6 +230,7 @@ export function registerCancelCommand(
             }
 
             await bot.sendMessage(chatId, '❌ Редактирование администраторов отменено. Вы возвращены в предыдущее состояние.');
+            await sendAdminCommandsIfNeeded(chatId, adminPermissionsLevel, returnState);
             return;
         }
 
@@ -227,6 +257,7 @@ export function registerCancelCommand(
                 }
 
                 await bot.sendMessage(chatId, '❌ Действие отменено. Список администраторов пуст. Вы возвращены в предыдущее состояние.');
+                await sendAdminCommandsIfNeeded(chatId, adminPermissionsLevel, returnState);
                 return;
             }
 
@@ -296,6 +327,7 @@ export function registerCancelCommand(
             }
 
             await bot.sendMessage(chatId, '❌ Принятие регистраций отменено. Вы возвращены в предыдущее состояние.');
+            await sendAdminCommandsIfNeeded(chatId, adminPermissionsLevel, returnState);
             return;
         }
 
@@ -325,6 +357,7 @@ export function registerCancelCommand(
                 }
 
                 await bot.sendMessage(chatId, '❌ Действие отменено. Список неактивных курьеров пуст, вы возвращены в предыдущее состояние.');
+                await sendAdminCommandsIfNeeded(chatId, adminPermissionsLevel, returnState);
                 return;
             }
 
@@ -369,6 +402,7 @@ export function registerCancelCommand(
             }
 
             await bot.sendMessage(chatId, '❌ Добавление СИМ отменено. Вы возвращены в авторизованный админ-режим.');
+            await sendAdminCommandsIfNeeded(chatId, adminPermissionsLevel, AdminState.AUTHENTICATED_WITH_WAREHOUSE);
             return;
         }
 
@@ -391,6 +425,7 @@ export function registerCancelCommand(
             }
 
             await bot.sendMessage(chatId, '❌ Просмотр истории сессий отменен. Вы возвращены в предыдущее состояние.');
+            await sendAdminCommandsIfNeeded(chatId, adminPermissionsLevel, returnState);
             return;
         }
 
@@ -411,6 +446,7 @@ export function registerCancelCommand(
             }
 
             await bot.sendMessage(chatId, '❌ Взаимодействие с СИМ отменено. Вы возвращены в состояние выбранного склада.');
+            await sendAdminCommandsIfNeeded(chatId, adminPermissionsLevel, AdminState.AUTHENTICATED_WITH_WAREHOUSE);
             return;
         }
 
@@ -437,6 +473,11 @@ export function registerCancelCommand(
                 }
 
                 await bot.sendMessage(chatId, '❌ Действие отменено. Контекст выбора СИМ сброшен, вы возвращены в состояние выбранного склада.');
+                await sendAdminCommandsIfNeeded(
+                    chatId,
+                    tempData?.adminPermissionsLevel,
+                    AdminState.AUTHENTICATED_WITH_WAREHOUSE
+                );
                 return;
             }
 
@@ -460,6 +501,11 @@ export function registerCancelCommand(
                 }
 
                 await bot.sendMessage(chatId, '❌ Действие отменено. Список СИМ пуст, вы возвращены в состояние выбранного склада.');
+                await sendAdminCommandsIfNeeded(
+                    chatId,
+                    tempData?.adminPermissionsLevel,
+                    AdminState.AUTHENTICATED_WITH_WAREHOUSE
+                );
                 return;
             }
 
@@ -503,6 +549,7 @@ export function registerCancelCommand(
             }
 
             await bot.sendMessage(chatId, '❌ Взаимодействие с курьерами отменено. Вы возвращены в предыдущее состояние.');
+            await sendAdminCommandsIfNeeded(chatId, adminPermissionsLevel, returnState);
             return;
         }
 
@@ -530,6 +577,7 @@ export function registerCancelCommand(
                 }
 
                 await bot.sendMessage(chatId, '❌ Действие отменено. Список курьеров пуст. Вы возвращены в предыдущее состояние.');
+                await sendAdminCommandsIfNeeded(chatId, adminPermissionsLevel, returnState);
                 return;
             }
 
