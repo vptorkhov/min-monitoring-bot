@@ -14,6 +14,11 @@ export interface MobilityDevice {
     updated_at: Date;
 }
 
+export interface DeleteDeviceWithSessionsResult {
+    deleted: boolean;
+    blockedByActiveSession: boolean;
+}
+
 export class MobilityDeviceRepository {
     private db: Pool;
 
@@ -131,8 +136,52 @@ export class MobilityDeviceRepository {
     }
 
     public async deleteById(deviceId: number): Promise<boolean> {
-        const query = 'DELETE FROM mobility_devices WHERE id = $1';
-        const result = await this.db.query(query, [deviceId]);
-        return (result.rowCount ?? 0) > 0;
+        try {
+            const query = 'DELETE FROM mobility_devices WHERE id = $1';
+            const result = await this.db.query(query, [deviceId]);
+            return (result.rowCount ?? 0) > 0;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Удаляет СИМ вместе с историей его сессий.
+     * Если по СИМ есть активная сессия, удаление блокируется.
+     */
+    public async deleteByIdWithSessions(deviceId: number): Promise<DeleteDeviceWithSessionsResult> {
+        const client = await this.db.connect();
+
+        try {
+            await client.query('BEGIN');
+
+            const activeCheck = await client.query(
+                'SELECT 1 FROM session WHERE device_id = $1 AND is_active = true LIMIT 1',
+                [deviceId]
+            );
+
+            if ((activeCheck.rowCount ?? 0) > 0) {
+                await client.query('ROLLBACK');
+                return { deleted: false, blockedByActiveSession: true };
+            }
+
+            await client.query('DELETE FROM session WHERE device_id = $1', [deviceId]);
+
+            const deleteResult = await client.query(
+                'DELETE FROM mobility_devices WHERE id = $1',
+                [deviceId]
+            );
+
+            await client.query('COMMIT');
+            return {
+                deleted: (deleteResult.rowCount ?? 0) > 0,
+                blockedByActiveSession: false,
+            };
+        } catch {
+            await client.query('ROLLBACK');
+            return { deleted: false, blockedByActiveSession: false };
+        } finally {
+            client.release();
+        }
     }
 }

@@ -221,15 +221,22 @@ export class AdminService {
     }
 
     async deleteAdmin(adminId: number): Promise<AdminMutateResult> {
-        const deleted = await this.repository.deleteById(adminId);
+        try {
+            const deleted = await this.repository.deleteById(adminId);
 
-        if (!deleted) {
+            if (!deleted) {
+                return {
+                    success: false,
+                    reason: 'Не удалось удалить администратора (возможно, запись уже удалена или связана с другими данными).'
+                };
+            }
+
+            return { success: true };
+        } catch {
             return {
                 success: false,
-                reason: 'Не удалось удалить администратора.'
+                reason: 'Произошла ошибка при удалении администратора. Попробуйте позже.'
             };
         }
-
-        return { success: true };
     }
 }

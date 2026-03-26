@@ -90,8 +90,12 @@ export class WarehouseRepository {
 
     // Удалить склад
     public async deleteWarehouse(id: number): Promise<boolean> {
-        const query = 'DELETE FROM warehouse WHERE id = $1';
-        const { rowCount } = await this.db.query(query, [id]);
-        return (rowCount ?? 0) > 0;
+        try {
+            const query = 'DELETE FROM warehouse WHERE id = $1';
+            const { rowCount } = await this.db.query(query, [id]);
+            return (rowCount ?? 0) > 0;
+        } catch {
+            return false;
+        }
     }
 }
