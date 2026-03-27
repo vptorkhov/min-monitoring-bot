@@ -1,5 +1,5 @@
 # Стадия сборки
-FROM node:18-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -17,9 +17,11 @@ COPY src/ ./src/
 RUN npm run build
 
 # Стадия продакшн
-FROM node:18-alpine
+FROM node:22-alpine
 
 WORKDIR /app
+
+ENV NODE_ENV=production
 
 # Создаем не-root пользователя
 RUN addgroup -g 1001 -S nodejs && \
@@ -29,14 +31,11 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY package*.json ./
 
 # Устанавливаем ТОЛЬКО production зависимости
-RUN npm ci --only=production && \
+RUN npm ci --omit=dev && \
     npm cache clean --force
 
 # Копируем собранный проект из стадии builder
 COPY --from=builder --chown=nextjs:nodejs /app/dist ./dist
-
-# Копируем package.json для корректного запуска
-COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
 # Меняем пользователя
 USER nextjs
