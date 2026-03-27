@@ -61,75 +61,108 @@ min-monitoring-bot/
 └── tg-bot/                             # Telegram-бот
     ├── .env                            # Переменные окружения (локально, не в Git)
     ├── .env.example                    # Пример переменных окружения
-    ├── .gitignore                       # Исключения для Git
-    ├── Dockerfile                        # Dockerfile для сборки бота
-    ├── package-lock.json                 # Lock-файл зависимостей
-    ├── package.json                      # Зависимости и npm-скрипты
-    ├── tsconfig.json                     # Конфигурация TypeScript
+    ├── .gitignore                      # Исключения для Git
+    ├── Dockerfile                      # Dockerfile для сборки бота
+    ├── min-monitoring-bot-tree.txt     # Текстовая версия структуры tg-bot/
+    ├── package-lock.json               # Lock-файл зависимостей
+    ├── package.json                    # Зависимости и npm-скрипты
+    ├── tsconfig.json                   # Конфигурация TypeScript
     │
-    └── src/                              # Исходный код приложения
+    ├── docs/                           # Архитектурная документация
+    │   └── state_management.md         # Описание системы состояний (State Machine)
+    │
+    └── src/                            # Исходный код приложения
         │
-        ├── index.ts                      # Точка входа (запуск БД, сервера и Telegram-бота)
+        ├── index.ts                    # Точка входа (запуск БД, сервера и Telegram-бота)
         │
-        ├── bot/                          # Логика Telegram-бота
-        │   ├── index.ts                  # Создание экземпляра бота
-        │   ├── init.ts                   # Инициализация зависимостей и регистрация команд/middleware
+        ├── bot/                        # Логика Telegram-бота
+        │   ├── index.ts                # Создание экземпляра бота
+        │   ├── init.ts                 # Инициализация зависимостей и регистрация команд/middleware
+        │   ├── callback-router.ts      # Единый роутер callback_query для inline-кнопок
+        │   ├── state-manager.ts        # Централизованный менеджер состояний пользователей
         │   │
-        │   ├── admin/                    # Логика скрытого админского режима
-        │   │   ├── admin-mode.ts         # Переключение/проверка admin-state и guard команд
-        │   │   └── README.md             # Документация по admin-режиму
+        │   ├── admin/                  # Логика скрытого админского режима
+        │   │   ├── admin-command-hints.ts  # Генерация текстовых подсказок со списком команд по роли/контексту
+        │   │   ├── admin-mode.ts       # Переключение/проверка admin-state и guard команд
+        │   │   └── README.md           # Документация по admin-режиму
         │   │
-        │   ├── commands/                 # Обработчики Telegram-команд
-        │   │   ├── index.ts              # Регистрация всех команд (/start, /set_warehouse, /clear_warehouse, /cancel и др.)
-        │   │   ├── admin.ts              # Команды /admin, /admin_login, /admin_register, /admin_logout, /exit_admin
-        │   │   ├── start.ts              # Команда /start (регистрация курьера)
-        │   │   ├── set-warehouse.ts      # Команда /set_warehouse (выбор и прикрепление к складу, блокируется при активной сессии)
-        │   │   ├── clear-warehouse.ts    # Команда /clear_warehouse (отвязка от всех складов)
-        │   │   ├── take-sim.ts           # Команда /take_sim (взятие СИМ, создание сессии)
-        │   │   ├── return-sim.ts         # Команда /return_sim (сдача СИМ, диалог о повреждениях)
-        │   │   └── cancel.ts             # Команда /cancel (отмена текущего действия)
+        │   ├── commands/               # Обработчики Telegram-команд
+        │   │   ├── index.ts            # Регистрация всех команд (/start, /set_warehouse, /clear_warehouse, /cancel и др.)
+        │   │   ├── admin.ts            # Все admin-команды (/admin, /admin_login, /superadmin_*, /exit_admin и др.)
+        │   │   ├── start.ts            # Команда /start (регистрация курьера)
+        │   │   ├── set-warehouse.ts    # Команда /set_warehouse (выбор и прикрепление к складу, блокируется при активной сессии)
+        │   │   ├── clear-warehouse.ts  # Команда /clear_warehouse (отвязка от всех складов)
+        │   │   ├── take-sim.ts         # Команда /take_sim (взятие СИМ, создание сессии)
+        │   │   ├── return-sim.ts       # Команда /return_sim (сдача СИМ, диалог о повреждениях)
+        │   │   └── cancel.ts           # Команда /cancel (отмена текущего действия)
         │   │
-        │   ├── handlers/                 # Обработчики диалоговых процессов
+        │   ├── features/               # Зарезервировано под модульный рефакторинг отдельных фич
+        │   │   ├── admin/
+        │   │   │   ├── modules/        # (в разработке)
+        │   │   │   └── shared/         # (в разработке)
+        │   │   └── courier/
+        │   │       └── modules/        # (в разработке)
+        │   │
+        │   ├── handlers/               # Обработчики диалоговых процессов
         │   │   └── registration.handler.ts  # Логика пошаговой регистрации (имя → телефон)
         │   │
-        │   ├── middlewares/              # Middleware для управления состояниями пользователя
-        │   │   ├── index.ts
-        │   │   ├── registration-state.middleware.ts  # Контроль процесса регистрации
-        │   │   └── state-manager.ts       # Централизованный менеджер состояний пользователей
+        │   ├── keyboards/              # Reply/inline клавиатуры, константы и утилиты
+        │   │   ├── index.ts            # Реэкспорт всех клавиатур
+        │   │   ├── keyboard.constants.ts   # Текстовые константы кнопок
+        │   │   ├── keyboard.utils.ts       # Вспомогательные функции построения клавиатур
+        │   │   ├── courier-actions.keyboard.ts     # Inline-кнопки действий курьера
+        │   │   ├── courier-main-keyboard.ts        # Главная reply-клавиатура курьера
+        │   │   ├── registration-flow.keyboard.ts   # Клавиатуры потока регистрации
+        │   │   ├── return-sim.keyboard.ts          # Клавиатура сдачи СИМ (повреждения)
+        │   │   ├── sim-selection.keyboard.ts       # Клавиатура выбора СИМ
+        │   │   ├── warehouse-selection.keyboard.ts # Клавиатура выбора склада
+        │   │   └── README.md           # Документация по клавиатурам
         │   │
-        │   └── keyboards/                # Reply-клавиатуры для регистрации и выбора склада
+        │   └── middlewares/            # Middleware для управления состояниями пользователя
+        │       ├── index.ts
+        │       ├── registration-state.middleware.ts  # Контроль процесса регистрации
+        │       └── README.md
         │
-        ├── config/                       # Конфигурация приложения
-        │   └── database.ts               # Инициализация и управление подключением к PostgreSQL
+        ├── config/                     # Конфигурация приложения
+        │   ├── database.ts             # Инициализация и управление подключением к PostgreSQL
+        │   └── README.md
         │
-        ├── constants/                    # Константы и перечисления
-        │   │   ├── commands.constant.ts      # Список поддерживаемых команд бота (курьерские + скрытые админские)
-        │   └── states.constant.ts        # Состояния (регистрация, выбор склада, взятие/сдача СИМ, admin-mode)
+        ├── constants/                  # Константы и перечисления
+        │   ├── commands.constant.ts    # Список поддерживаемых команд бота (курьерские + скрытые админские)
+        │   ├── states.constant.ts      # Состояния (регистрация, выбор склада, взятие/сдача СИМ, admin-mode)
+        │   └── README.md
         │
-        ├── repositories/                 # Слой работы с БД (SQL-запросы)
-        │   ├── courier.repository.ts     # Запросы к таблице couriers
-        │   ├── warehouse.repository.ts   # Запросы к таблице warehouse
-        │   ├── mobility-device.repository.ts # Запросы к таблице mobility_devices (получение, обновление статуса)
-        │   ├── session.repository.ts     # Запросы к таблице session (создание, закрытие, поиск активных)
-        │   ├── admin.repository.ts       # Запросы к таблице admins (проверка логина, создание заявки, вход/выход)
+        ├── repositories/               # Слой работы с БД (SQL-запросы)
+        │   ├── admin.repository.ts     # Запросы к таблице admins (проверка логина, создание заявки, вход/выход)
+        │   ├── courier.repository.ts   # Запросы к таблице couriers
+        │   ├── mobility-device.repository.ts  # Запросы к таблице mobility_devices (получение, обновление статуса)
+        │   ├── session.repository.ts   # Запросы к таблице session (создание, закрытие, поиск активных)
+        │   ├── warehouse.repository.ts # Запросы к таблице warehouses
+        │   ├── README.md
         │   └── types/
-        │       └── warehouse.type.ts     # TypeScript-тип Warehouse
+        │       ├── warehouse.type.ts   # TypeScript-тип Warehouse
+        │       └── README.md
         │
-        ├── services/                     # Бизнес-логика приложения
-        │   ├── courier.service.ts        # Логика работы с курьерами (регистрация, прикрепление к складу, проверка активной сессии)
-        │   ├── warehouse.service.ts      # Логика работы со складами (получение активных, валидация, создание)
-        │   ├── session.service.ts        # Логика работы с сессиями (начало, завершение, проверки состояния)
-        │   ├── admin.service.ts          # Логика администраторов (регистрация, вход, валидация, хеширование)
-        │   └── activation-notifier.service.ts # Фоновый воркер — уведомления при активации курьеров
+        ├── services/                   # Бизнес-логика приложения
+        │   ├── activation-notifier.service.ts  # Фоновый воркер — уведомления при активации курьеров
+        │   ├── admin.service.ts        # Логика администраторов (регистрация, вход, валидация, хеширование)
+        │   ├── courier.service.ts      # Логика работы с курьерами (регистрация, прикрепление к складу, проверка сессии)
+        │   ├── session.service.ts      # Логика работы с сессиями (начало, завершение, проверки состояния)
+        │   ├── warehouse.service.ts    # Логика работы со складами (получение активных, валидация, создание)
+        │   └── README.md
         │
-        ├── server/                       # HTTP-сервер (служебный)
-        │   └── index.ts                  # Express-сервер с endpoint /health
+        ├── server/                     # HTTP-сервер (служебный)
+        │   ├── index.ts                # Express-сервер с endpoint /health
+        │   └── README.md
         │
-        ├── utils/                        # Вспомогательные функции
-        │   └── telegram.utils.ts         # Утилиты для работы с Telegram-данными
+        ├── utils/                      # Вспомогательные функции
+        │   ├── telegram.utils.ts       # Утилиты для работы с Telegram-данными
+        │   └── README.md
         │
-        └── validators/                   # Валидация пользовательских данных
-            └── phone.validator.ts        # Проверка корректности номера телефона
+        └── validators/                 # Валидация пользовательских данных
+            ├── phone.validator.ts      # Проверка корректности номера телефона
+            ├── sim-number.validator.ts # Проверка корректности номера СИМ
+            └── README.md
 ```
 
 ## 📚 Документация
@@ -153,6 +186,7 @@ min-monitoring-bot/
 Дополнительно:
 
 - [`db/readme.md`](db/readme.md) — структура БД, таблицы, связи и начальные данные
+- [`tg-bot/docs/state_management.md`](tg-bot/docs/state_management.md) — архитектура системы состояний (State Machine): переходы, tempData, жизненный цикл
 
 ## ✨ Функциональность
 
@@ -182,22 +216,18 @@ min-monitoring-bot/
 #### Курьерский функционал:
 
 - Смена прикрепленного склада (блокируется при активной сессии)
-- Взятие СИМ в работу (`/take_sim`)
-    - список устройств склада + личный первый
-    - создаёт запись в `session`
-- Сдача СИМ после использования (`/return_sim`)
-    - пачка вопросов об повреждениях для не‑личных СИМ
-    - статус персональных устройств закрывается автоматически
-    - обновление `mobility_devices.status` и `is_active`
 - Просмотр истории своих сессий
 
 #### Административный функционал:
 
 - Добавление/редактирование СИМ
-- ~~Создание склада (добавлено: `/superadmin_create_warehouse`)~~
 - Назначение курьеров на склады
 - Просмотр статистики использования
 - Принудительное завершение сессий
+
+#### Архитектурные улучшения:
+
+- Модульный рефакторинг фич в `bot/features/admin/` и `bot/features/courier/` (директории зарезервированы)
 
 ## 💾 База данных
 
