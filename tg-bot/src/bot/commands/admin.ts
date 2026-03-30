@@ -744,6 +744,9 @@ export function registerAdminModeCommands(
     const statusCmd = isSuperadmin
       ? "/superadmin_edit_courier_status"
       : "/admin_edit_courier_status";
+    const nameCmd = isSuperadmin
+      ? "/superadmin_edit_courier_name"
+      : "/admin_edit_courier_name";
     const historyCmd = isSuperadmin
       ? "/superadmin_courier_history"
       : "/admin_courier_history";
@@ -767,6 +770,7 @@ export function registerAdminModeCommands(
         "",
         "Доступные команды:",
         statusCmd,
+        nameCmd,
         historyCmd,
         "",
         "/cancel - вернуться к списку курьеров.",
@@ -2500,6 +2504,78 @@ export function registerAdminModeCommands(
     );
   });
 
+  bot.onText(/^\/admin_edit_courier_name(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора курьера через /admin_edit_couriers.",
+      );
+      return;
+    }
+
+    const resolved = await tryResolveSelectedEditCourier(
+      telegramId,
+      chatId,
+      "/admin_edit_couriers",
+    );
+    if (!resolved) {
+      return;
+    }
+
+    stateManager.setUserState(telegramId, AdminState.ADMIN_EDIT_COURIER_AWAITING_NAME);
+    await bot.sendMessage(
+      chatId,
+      `Курьер: <b>${escapeHtml(resolved.courier.fullName)}</b>\n\nВведите новое ФИО (минимум 2 символа).\n/cancel - вернуться к информации о выбранном курьере.`,
+      { parse_mode: "HTML" },
+    );
+  });
+
+  bot.onText(/^\/superadmin_edit_courier_name(?:@\w+)?$/, async (msg) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+
+    if (!telegramId) {
+      return;
+    }
+
+    if (!isUserInAdminMode(telegramId)) {
+      await bot.sendMessage(
+        chatId,
+        "❌ Команда недоступна без выбора курьера через /superadmin_edit_couriers.",
+      );
+      return;
+    }
+
+    const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+    if ((tempData.adminPermissionsLevel ?? 0) < 2) {
+      await bot.sendMessage(chatId, "🚫 Нет прав на эту команду.");
+      return;
+    }
+
+    const resolved = await tryResolveSelectedEditCourier(
+      telegramId,
+      chatId,
+      "/superadmin_edit_couriers",
+    );
+    if (!resolved) {
+      return;
+    }
+
+    stateManager.setUserState(telegramId, AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_NAME);
+    await bot.sendMessage(
+      chatId,
+      `Курьер: <b>${escapeHtml(resolved.courier.fullName)}</b>\n\nВведите новое ФИО (минимум 2 символа).\n/cancel - вернуться к информации о выбранном курьере.`,
+      { parse_mode: "HTML" },
+    );
+  });
+
   bot.onText(/^\/admin_courier_history(?:@\w+)?$/, async (msg) => {
     const chatId = msg.chat.id;
     const telegramId = msg.from?.id;
@@ -2654,7 +2730,9 @@ export function registerAdminModeCommands(
       currentState !== AdminState.ADMIN_EDIT_COURIER_ACTION_SELECTING &&
       currentState !== AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING &&
       currentState !== AdminState.ADMIN_EDIT_COURIER_AWAITING_STATUS &&
+      currentState !== AdminState.ADMIN_EDIT_COURIER_AWAITING_NAME &&
       currentState !== AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_STATUS &&
+      currentState !== AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_NAME &&
       currentState !== AdminState.ADMIN_COURIER_HISTORY_AWAITING_FULL &&
       currentState !== AdminState.SUPERADMIN_COURIER_HISTORY_AWAITING_FULL
     ) {
@@ -4246,10 +4324,11 @@ export function registerAdminModeCommands(
     ) {
       const isSuperadmin = currentState === AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING;
       const statusCmd = isSuperadmin ? "/superadmin_edit_courier_status" : "/admin_edit_courier_status";
+      const nameCmd = isSuperadmin ? "/superadmin_edit_courier_name" : "/admin_edit_courier_name";
       const historyCmd = isSuperadmin ? "/superadmin_courier_history" : "/admin_courier_history";
       await bot.sendMessage(
         chatId,
-        `ℹ️ Выберите действие командой: ${statusCmd} или ${historyCmd}.\n\n/cancel - вернуться к списку курьеров.`,
+        `ℹ️ Выберите действие командой: ${statusCmd}, ${nameCmd} или ${historyCmd}.\n\n/cancel - вернуться к списку курьеров.`,
       );
       return;
     }
@@ -4318,6 +4397,76 @@ export function registerAdminModeCommands(
       await bot.sendMessage(
         chatId,
         `✅ Статус курьера изменен на <b>${refreshedCourier.isActive ? "Активный" : "Отключен"}</b>.`,
+        { parse_mode: "HTML" },
+      );
+      await sendCourierActionsMessage(chatId, refreshedCourier, isSuperadmin);
+      return;
+    }
+
+    if (
+      currentState === AdminState.ADMIN_EDIT_COURIER_AWAITING_NAME ||
+      currentState === AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_NAME
+    ) {
+      const isSuperadmin = currentState === AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_NAME;
+      const newFullName = text.trim();
+      if (newFullName.length < 2) {
+        await bot.sendMessage(
+          chatId,
+          "❌ ФИО должно содержать минимум 2 символа.",
+        );
+        return;
+      }
+
+      const commandHint = isSuperadmin ? "/superadmin_edit_couriers" : "/admin_edit_couriers";
+      const resolved = await tryResolveSelectedEditCourier(telegramId, chatId, commandHint);
+      if (!resolved) {
+        return;
+      }
+
+      const updated = await courierRepository.updateFullName(resolved.courier.id, newFullName);
+      if (!updated) {
+        await bot.sendMessage(
+          chatId,
+          "❌ Не удалось изменить ФИО курьера.",
+        );
+        return;
+      }
+
+      const refreshedRow = await courierRepository.findById(resolved.courier.id);
+      if (!refreshedRow) {
+        await bot.sendMessage(
+          chatId,
+          `❌ Курьер не найден. Запустите ${commandHint} заново.`,
+        );
+        return;
+      }
+
+      const refreshedCourier: EditableCourierSessionItem = {
+        id: refreshedRow.id,
+        fullName: refreshedRow.full_name,
+        nickname: refreshedRow.nickname,
+        phoneNumber: refreshedRow.phone_number,
+        warehouseId: refreshedRow.warehouse_id,
+        isActive: refreshedRow.is_active,
+      };
+
+      const tempData = stateManager.getUserTempData<AdminSessionData>(telegramId) || {};
+      const updatedList = (tempData.editCouriers || []).map((c) =>
+        c.id === refreshedCourier.id ? refreshedCourier : c,
+      );
+
+      const nextState = isSuperadmin
+        ? AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING
+        : AdminState.ADMIN_EDIT_COURIER_ACTION_SELECTING;
+
+      stateManager.setUserState(telegramId, nextState);
+      stateManager.setUserTempData(telegramId, {
+        editCouriers: updatedList,
+      });
+
+      await bot.sendMessage(
+        chatId,
+        `✅ ФИО курьера изменено на <b>${escapeHtml(refreshedCourier.fullName)}</b>.`,
         { parse_mode: "HTML" },
       );
       await sendCourierActionsMessage(chatId, refreshedCourier, isSuperadmin);

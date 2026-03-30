@@ -116,10 +116,12 @@ Middleware прикрепляется через `bot.on('message', middleware)`
 - `admin_edit_couriers_selecting` — ожидание номера курьера в сценарии `/admin_edit_couriers`.
 - `admin_edit_courier_action_selecting` — ожидание выбора действия по выбранному курьеру.
 - `admin_edit_courier_awaiting_status` — ожидание нового статуса активности курьера.
+- `admin_edit_courier_awaiting_name` — ожидание нового ФИО курьера.
 - `admin_courier_history_awaiting_full` — ожидание ответа `ДА`/`нет`/`/cancel` после вывода последних 50 сессий курьера.
 - `superadmin_edit_couriers_selecting` — ожидание номера курьера в сценарии `/superadmin_edit_couriers`.
 - `superadmin_edit_courier_action_selecting` — ожидание выбора действия по выбранному курьеру (суперадмин).
 - `superadmin_edit_courier_awaiting_status` — ожидание нового статуса активности курьера (суперадмин).
+- `superadmin_edit_courier_awaiting_name` — ожидание нового ФИО курьера (суперадмин).
 - `superadmin_courier_history_awaiting_full` — ожидание ответа `ДА`/`нет`/`/cancel` для полной истории (суперадмин).
 
 Поведение:
@@ -161,6 +163,8 @@ Middleware прикрепляется через `bot.on('message', middleware)`
   (включая курьеров без склада), доступный только суперадмину (`permissions_level >= 2`).
 - `/admin_edit_courier_status` и `/superadmin_edit_courier_status` меняют `couriers.is_active`
   по вариантам ввода `1`/`2` и текстовым эквивалентам `Активный`/`Отключен`.
+- `/admin_edit_courier_name` и `/superadmin_edit_courier_name` меняют `couriers.full_name`
+  после ввода нового ФИО (минимум 2 символа).
 - `/admin_courier_history` и `/superadmin_courier_history` сначала показывают последние 50
   сессий курьера (новейшие -> старейшие), затем ожидают `ДА` (строго верхний регистр)
   для полной истории или `/cancel`/`нет` для возврата.
@@ -188,7 +192,7 @@ Middleware прикрепляется через `bot.on('message', middleware)`
 - `/cancel` в `/admin_edit_couriers` и `/superadmin_edit_couriers` работает контекстно:
   - на этапе выбора номера курьера возвращает в состояние до запуска базовой команды;
   - на этапе выбора действия по курьеру возвращает к списку курьеров;
-  - на этапах ввода статуса и ожидания полной истории возвращает к карточке выбранного курьера.
+  - на этапах ввода статуса, нового ФИО и ожидания полной истории возвращает к карточке выбранного курьера.
 ### Важное поведение
 
 - Команды **никогда не мешают**: middleware не прерывает их выполнение.
