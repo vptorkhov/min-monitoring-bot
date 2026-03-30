@@ -35,6 +35,7 @@ export interface SessionHistoryByDeviceRecord {
     status_comment: string | null;
     is_active: boolean;
     courier_full_name: string;
+    courier_nickname: string | null;
 }
 
 export interface ActiveSessionByCourierWithDeviceRecord {
@@ -61,6 +62,7 @@ export interface ActiveSessionByWarehouseRecord {
     status_comment: string | null;
     is_active: boolean;
     courier_full_name: string;
+    courier_nickname: string | null;
     device_number: string | null;
     device_is_personal: boolean;
 }
@@ -74,6 +76,7 @@ export interface SessionHistoryByWarehouseRecord {
     status_comment: string | null;
     is_active: boolean;
     courier_full_name: string;
+    courier_nickname: string | null;
     device_number: string | null;
     device_is_personal: boolean;
 }
@@ -168,7 +171,8 @@ export class SessionRepository {
                 s.sim_status_after,
                 s.status_comment,
                 s.is_active,
-                c.full_name AS courier_full_name
+                c.full_name AS courier_full_name,
+                c.nickname AS courier_nickname
             FROM session s
             INNER JOIN couriers c ON c.id = s.courier_id
             WHERE s.device_id = $1
@@ -217,6 +221,7 @@ export class SessionRepository {
             SELECT
                 s.*,
                 c.full_name AS courier_full_name,
+                c.nickname AS courier_nickname,
                 d.device_number,
                 d.is_personal AS device_is_personal
             FROM session s
@@ -246,6 +251,7 @@ export class SessionRepository {
                 s.status_comment,
                 s.is_active,
                 c.full_name AS courier_full_name,
+                c.nickname AS courier_nickname,
                 d.device_number,
                 d.is_personal AS device_is_personal
             FROM session s

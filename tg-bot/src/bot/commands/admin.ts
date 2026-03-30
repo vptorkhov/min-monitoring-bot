@@ -315,6 +315,22 @@ function parseMoscowDateRangeInput(
   };
 }
 
+function formatCourierDisplayHtml(fullName: string, nickname?: string | null): string {
+  const normalizedNickname = (nickname || "").trim();
+  if (!normalizedNickname) {
+    return `<b>${escapeHtml(fullName)}</b>`;
+  }
+
+  const withoutAt = normalizedNickname.startsWith("@")
+    ? normalizedNickname.slice(1)
+    : normalizedNickname;
+  if (!withoutAt) {
+    return `<b>${escapeHtml(fullName)}</b>`;
+  }
+
+  return `<b>${escapeHtml(fullName)}</b> @<b>${escapeHtml(withoutAt)}</b>`;
+}
+
 function formatSimHistoryRows(history: SessionHistoryByDeviceRecord[]): string {
   return history
     .map((row, index) => {
@@ -330,7 +346,7 @@ function formatSimHistoryRows(history: SessionHistoryByDeviceRecord[]): string {
       return [
         `${index + 1}. Начало: <b>${start}</b>`,
         `Окончание: <b>${end}</b>`,
-        `Курьер: <b>${escapeHtml(row.courier_full_name)}</b>`,
+        `Курьер: ${formatCourierDisplayHtml(row.courier_full_name, row.courier_nickname)}`,
         `Состояние СИМ после сессии: <b>${escapeHtml(simStatus)}</b>`,
         `Комментарий: <b>${comment}</b>`,
       ].join("\n");
@@ -351,12 +367,12 @@ function formatCourierHistoryRows(history: SessionHistoryByCourierRecord[]): str
 }
 
 function formatActiveSessionsByWarehouseRows(
-  sessions: { courierFullName: string; deviceLabel: string }[],
+  sessions: { courierFullName: string; courierNickname: string | null; deviceLabel: string }[],
 ): string {
   return sessions
     .map(
       (session, index) =>
-        `${index + 1}. <b>${escapeHtml(session.courierFullName)}</b> - <b>${escapeHtml(session.deviceLabel)}</b>`,
+        `${index + 1}. ${formatCourierDisplayHtml(session.courierFullName, session.courierNickname)} - <b>${escapeHtml(session.deviceLabel)}</b>`,
     )
     .join("\n");
 }
@@ -364,6 +380,7 @@ function formatActiveSessionsByWarehouseRows(
 function formatSessionsHistoryByWarehouseRows(
   sessions: {
     courierFullName: string;
+    courierNickname: string | null;
     deviceLabel: string;
     startDate: Date;
     endDate: Date | null;
@@ -379,7 +396,7 @@ function formatSessionsHistoryByWarehouseRows(
       const commentText = (session.statusComment || "").trim() || "-";
 
       return [
-        `${index + 1}. <b>${escapeHtml(session.courierFullName)}</b>`,
+        `${index + 1}. ${formatCourierDisplayHtml(session.courierFullName, session.courierNickname)}`,
         `СИМ: <b>${escapeHtml(session.deviceLabel)}</b>`,
         `Дата начала: <b>${formatMoscowDateTime(session.startDate)}</b>`,
         `Дата конца: <b>${formatMoscowDateTime(session.endDate)}</b>`,
@@ -2602,12 +2619,16 @@ export function registerAdminModeCommands(
     }
 
     const history = await sessionRepository.getHistoryByCourier(resolved.courier.id, 50);
+    const courierDisplay = formatCourierDisplayHtml(
+      resolved.courier.fullName,
+      resolved.courier.nickname,
+    );
 
     if (!history.length) {
       stateManager.setUserState(telegramId, AdminState.ADMIN_EDIT_COURIER_ACTION_SELECTING);
       await bot.sendMessage(
         chatId,
-        `История сессий курьера <b>${escapeHtml(resolved.courier.fullName)}</b> пуста.`,
+        `История сессий курьера ${courierDisplay} пуста.`,
         { parse_mode: "HTML" },
       );
       await sendCourierActionsMessage(chatId, resolved.courier, false);
@@ -2619,7 +2640,7 @@ export function registerAdminModeCommands(
     await bot.sendMessage(
       chatId,
       [
-        "История сессий курьера",
+        `История сессий курьера ${courierDisplay}`,
         "",
         formatCourierHistoryRows(history),
         "",
@@ -2661,12 +2682,16 @@ export function registerAdminModeCommands(
     }
 
     const history = await sessionRepository.getHistoryByCourier(resolved.courier.id, 50);
+    const courierDisplay = formatCourierDisplayHtml(
+      resolved.courier.fullName,
+      resolved.courier.nickname,
+    );
 
     if (!history.length) {
       stateManager.setUserState(telegramId, AdminState.SUPERADMIN_EDIT_COURIER_ACTION_SELECTING);
       await bot.sendMessage(
         chatId,
-        `История сессий курьера <b>${escapeHtml(resolved.courier.fullName)}</b> пуста.`,
+        `История сессий курьера ${courierDisplay} пуста.`,
         { parse_mode: "HTML" },
       );
       await sendCourierActionsMessage(chatId, resolved.courier, true);
@@ -2678,7 +2703,7 @@ export function registerAdminModeCommands(
     await bot.sendMessage(
       chatId,
       [
-        "История сессий курьера",
+        `История сессий курьера ${courierDisplay}`,
         "",
         formatCourierHistoryRows(history),
         "",
@@ -4506,6 +4531,10 @@ export function registerAdminModeCommands(
       if (!resolved) {
         return;
       }
+      const courierDisplay = formatCourierDisplayHtml(
+        resolved.courier.fullName,
+        resolved.courier.nickname,
+      );
 
       const fullHistory = await sessionRepository.getHistoryByCourier(resolved.courier.id);
       const nextState = isSuperadmin
@@ -4516,14 +4545,14 @@ export function registerAdminModeCommands(
       if (!fullHistory.length) {
         await bot.sendMessage(
           chatId,
-          `История сессий курьера <b>${escapeHtml(resolved.courier.fullName)}</b> пуста.`,
+          `История сессий курьера ${courierDisplay} пуста.`,
           { parse_mode: "HTML" },
         );
       } else {
         const historyText = formatCourierHistoryRows(fullHistory);
         await bot.sendMessage(
           chatId,
-          `Полная история сессий курьера <b>${escapeHtml(resolved.courier.fullName)}</b>:\n\n${historyText}`,
+          `Полная история сессий курьера ${courierDisplay}:\n\n${historyText}`,
           { parse_mode: "HTML" },
         );
       }
