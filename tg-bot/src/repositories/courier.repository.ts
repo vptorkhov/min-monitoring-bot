@@ -122,6 +122,22 @@ export class CourierRepository {
         return result.rows;
     }
 
+    async deleteInactiveWithoutSessionsById(id: number): Promise<boolean> {
+        const result = await this.pool.query(
+            `DELETE FROM couriers c
+             WHERE c.id = $1
+               AND c.is_active = false
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM session s
+                   WHERE s.courier_id = c.id
+               )`,
+            [id]
+        );
+
+        return (result.rowCount ?? 0) > 0;
+    }
+
     // Получить всех активированных курьеров
     async findAllActive(): Promise<CourierFromDB[]> {
         const result = await this.pool.query<CourierFromDB>(

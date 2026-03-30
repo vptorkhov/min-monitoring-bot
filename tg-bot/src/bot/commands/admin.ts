@@ -3723,9 +3723,20 @@ export function registerAdminModeCommands(
           { parse_mode: "HTML" },
         );
       } else {
+        const cancelResult = await courierService.cancelPendingRegistration(
+          resolved.courier.id,
+        );
+        if (!cancelResult.success) {
+          await bot.sendMessage(
+            chatId,
+            `❌ ${cancelResult.reason || "Не удалось отменить регистрацию курьера."}`,
+          );
+          return;
+        }
+
         await bot.sendMessage(
           chatId,
-          `ℹ️ Курьер <b>${escapeHtml(resolved.courier.fullName)}</b> остался неактивным.`,
+          `✅ Регистрация курьера <b>${escapeHtml(resolved.courier.fullName)}</b> отменена. Курьер удален из базы данных.`,
           { parse_mode: "HTML" },
         );
       }
