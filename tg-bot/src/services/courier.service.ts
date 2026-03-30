@@ -102,6 +102,19 @@ export class CourierService {
         return { success: true };
     }
 
+    async cancelPendingRegistration(courierId: number): Promise<CourierMutateResult> {
+        const deleted = await this.repository.deleteInactiveWithoutSessionsById(courierId);
+
+        if (!deleted) {
+            return {
+                success: false,
+                reason: 'Не удалось отменить регистрацию: курьер уже не является неактивным кандидатом без сессий.'
+            };
+        }
+
+        return { success: true };
+    }
+
     // Получить активных курьеров, которым ещё не отправлено уведомление
     async getActiveNotNotifiedCouriers(): Promise<CourierFromDB[]> {
         return await this.repository.findActiveNotNotified();
