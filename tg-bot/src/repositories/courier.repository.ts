@@ -97,6 +97,15 @@ export class CourierRepository {
         return (result.rowCount ?? 0) > 0;
     }
 
+    async updateFullName(id: number, fullName: string): Promise<boolean> {
+        const result = await this.pool.query(
+            'UPDATE couriers SET full_name = $1 WHERE id = $2',
+            [fullName, id]
+        );
+
+        return (result.rowCount ?? 0) > 0;
+    }
+
     async findInactiveWithoutSessions(): Promise<PendingCourierApprovalCandidate[]> {
         const result = await this.pool.query<PendingCourierApprovalCandidate>(
             `SELECT c.id, c.telegram_id, c.full_name, c.nickname

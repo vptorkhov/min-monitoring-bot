@@ -606,11 +606,14 @@ export function registerCancelCommand(
         }
 
         const isEditCourierSubflowState = currentState === AdminState.ADMIN_EDIT_COURIER_AWAITING_STATUS
+            || currentState === AdminState.ADMIN_EDIT_COURIER_AWAITING_NAME
             || currentState === AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_STATUS
+            || currentState === AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_NAME
             || currentState === AdminState.ADMIN_COURIER_HISTORY_AWAITING_FULL
             || currentState === AdminState.SUPERADMIN_COURIER_HISTORY_AWAITING_FULL;
         if (isEditCourierSubflowState) {
             const isSuperadmin = currentState === AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_STATUS
+                || currentState === AdminState.SUPERADMIN_EDIT_COURIER_AWAITING_NAME
                 || currentState === AdminState.SUPERADMIN_COURIER_HISTORY_AWAITING_FULL;
 
             const tempData = stateManager.getUserTempData<{
@@ -633,10 +636,11 @@ export function registerCancelCommand(
                 if (row) {
                     const statusText = row.is_active ? 'Активный' : 'Отключен';
                     const statusCmd = isSuperadmin ? '/superadmin_edit_courier_status' : '/admin_edit_courier_status';
+                    const nameCmd = isSuperadmin ? '/superadmin_edit_courier_name' : '/admin_edit_courier_name';
                     const historyCmd = isSuperadmin ? '/superadmin_courier_history' : '/admin_courier_history';
                     await bot.sendMessage(
                         chatId,
-                        `❌ Действие отменено. Вы возвращены к информации о курьере.\n\nКурьер: <b>${row.full_name}</b>\nТелефон: <b>${row.phone_number}</b>\nСтатус: <b>${statusText}</b>\n\nДоступные команды:\n${statusCmd}\n${historyCmd}\n\n/cancel - вернуться к списку курьеров.`,
+                        `❌ Действие отменено. Вы возвращены к информации о курьере.\n\nКурьер: <b>${row.full_name}</b>\nТелефон: <b>${row.phone_number}</b>\nСтатус: <b>${statusText}</b>\n\nДоступные команды:\n${statusCmd}\n${nameCmd}\n${historyCmd}\n\n/cancel - вернуться к списку курьеров.`,
                         { parse_mode: 'HTML' }
                     );
                     return;

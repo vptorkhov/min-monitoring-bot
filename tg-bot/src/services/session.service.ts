@@ -23,12 +23,14 @@ export interface StartSessionResult {
 
 export interface ActiveWarehouseSessionView {
     courierFullName: string;
+    courierNickname: string | null;
     deviceLabel: string;
     startDate: Date;
 }
 
 export interface WarehouseSessionHistoryView {
     courierFullName: string;
+    courierNickname: string | null;
     deviceLabel: string;
     startDate: Date;
     endDate: Date | null;
@@ -164,6 +166,7 @@ export class SessionService {
 
         return sessions.map((session) => ({
             courierFullName: session.courier_full_name,
+            courierNickname: session.courier_nickname,
             deviceLabel: session.device_is_personal
                 ? 'Личный'
                 : (session.device_number || 'без номера').toUpperCase(),
@@ -185,6 +188,7 @@ export class SessionService {
 
         return sessions.map((session) => ({
             courierFullName: session.courier_full_name,
+            courierNickname: session.courier_nickname,
             deviceLabel: session.device_is_personal
                 ? 'Личный'
                 : (session.device_number || 'без номера').toUpperCase(),

@@ -67,7 +67,9 @@ export const AdminState = {
     ADMIN_EDIT_COURIER_ACTION_SELECTING: 'admin_edit_courier_action_selecting',
     SUPERADMIN_EDIT_COURIER_ACTION_SELECTING: 'superadmin_edit_courier_action_selecting',
     ADMIN_EDIT_COURIER_AWAITING_STATUS: 'admin_edit_courier_awaiting_status',
+    ADMIN_EDIT_COURIER_AWAITING_NAME: 'admin_edit_courier_awaiting_name',
     SUPERADMIN_EDIT_COURIER_AWAITING_STATUS: 'superadmin_edit_courier_awaiting_status',
+    SUPERADMIN_EDIT_COURIER_AWAITING_NAME: 'superadmin_edit_courier_awaiting_name',
     ADMIN_COURIER_HISTORY_AWAITING_FULL: 'admin_courier_history_awaiting_full',
     SUPERADMIN_COURIER_HISTORY_AWAITING_FULL: 'superadmin_courier_history_awaiting_full'
 } as const;
