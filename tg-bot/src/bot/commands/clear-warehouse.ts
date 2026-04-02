@@ -37,7 +37,7 @@ export function registerClearWarehouseCommand(
         // запрет на отвязку, если есть активная сессия
         const hasSession = await sessionService.hasActiveSession(telegramId);
         if (hasSession) {
-            await bot.sendMessage(chatId, '❌ У вас есть активная сессия. Сначала сдайте СИМ.');
+            await bot.sendMessage(chatId, '❌ У вас есть активная сессия. Сначала сдайте Велосипед.');
             return;
         }
 

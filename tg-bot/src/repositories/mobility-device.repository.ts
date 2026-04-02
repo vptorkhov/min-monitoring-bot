@@ -34,11 +34,17 @@ export class MobilityDeviceRepository {
         // courierPersonalDeviceId -- id "ЛИЧНЫЙ" устройства, если нужно сортировать
         // Эта функция реализуется в SQL/при вызове сервиса.
         const query = `
-            SELECT *
-            FROM mobility_devices
-            WHERE is_active = true
-              AND (is_personal = true OR warehouse_id = $1)
-            ORDER BY is_personal DESC, id;
+                        SELECT md.*
+                        FROM mobility_devices md
+                        WHERE md.is_active = true
+                            AND (md.is_personal = true OR md.warehouse_id = $1)
+                            AND NOT EXISTS (
+                                    SELECT 1
+                                    FROM session s
+                                    WHERE s.device_id = md.id
+                                        AND s.is_active = true
+                            )
+                        ORDER BY md.is_personal DESC, md.id;
         `;
         const { rows } = await this.db.query<MobilityDevice>(query, [warehouseId]);
         return rows;

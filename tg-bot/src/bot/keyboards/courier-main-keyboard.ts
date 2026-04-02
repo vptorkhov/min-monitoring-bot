@@ -32,7 +32,7 @@ export async function resolveCourierMainKeyboard(
     const hasSession = await sessionService.hasActiveSession(telegramId);
     if (hasSession) {
         return {
-            text: 'У вас активная сессия. Используйте кнопку ниже для сдачи СИМ:',
+            text: 'У вас активная сессия. Используйте кнопку ниже для сдачи Велосипеда:',
             replyMarkup: getCourierActiveSessionKeyboard()
         };
     }

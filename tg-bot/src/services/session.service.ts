@@ -115,6 +115,11 @@ export class SessionService {
             return { success: false, error: 'Устройство не принадлежит вашему складу' };
         }
 
+        const activeByDevice = await this.sessionRepo.hasActiveByDevice(deviceId);
+        if (activeByDevice) {
+            return { success: false, error: 'Этот Велосипед уже занят другим курьером' };
+        }
+
         const session = await this.sessionRepo.createSession({
             courier_id: courier.id,
             device_id: deviceId,

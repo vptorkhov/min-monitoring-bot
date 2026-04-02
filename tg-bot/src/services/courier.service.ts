@@ -192,7 +192,7 @@ export class CourierService {
         const sessionRepo = new SessionRepository();
         const hasActive = !!(await sessionRepo.findActiveByCourier(courier.id));
         if (hasActive) {
-            return { success: false, message: 'У вас есть активная сессия, сначала сдайте СИМ' };
+            return { success: false, message: 'У вас есть активная сессия, сначала сдайте Велосипед' };
         }
 
         // 2. Проверка выбранного склада (только если warehouseId не null)
@@ -230,7 +230,7 @@ export class CourierService {
         const sessionRepo = new SessionRepository();
         const hasActive = !!(await sessionRepo.findActiveByCourier(courier.id));
         if (hasActive) {
-            return { success: false, message: 'У вас есть активная сессия, сначала сдайте СИМ' };
+            return { success: false, message: 'У вас есть активная сессия, сначала сдайте Велосипед' };
         }
 
         // 2. Обновление склада на NULL в БД

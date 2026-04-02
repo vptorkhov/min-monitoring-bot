@@ -55,12 +55,12 @@ export function registerTakeSimCommand(
         const device = devices[idx];
         const startResult = await sessionService.startSession(telegramId, device.id);
         if (!startResult.success) {
-            await bot.sendMessage(chatId, `❌ Не удалось взять СИМ: ${startResult.error}`);
+            await bot.sendMessage(chatId, `❌ Не удалось взять Велосипед: ${startResult.error}`);
             return true;
         }
 
         const label = device.is_personal ? 'Личный' : device.device_number || 'без номера';
-        await bot.sendMessage(chatId, `✅ СИМ (${label}) взят.`);
+        await bot.sendMessage(chatId, `✅ Велосипед (${label}) взят.`);
         stateManager.clearUser(telegramId);
         await sendCourierMainKeyboard(bot, chatId, telegramId, courierService, sessionService);
         return true;
@@ -81,7 +81,7 @@ export function registerTakeSimCommand(
         // запрет, если уже есть активная сессия
         const has = await sessionService.hasActiveSession(telegramId);
         if (has) {
-            await bot.sendMessage(chatId, '❌ У вас уже есть активная сессия. Сначала сдайте текущий СИМ.');
+            await bot.sendMessage(chatId, '❌ У вас уже есть активная сессия. Сначала сдайте текущий Велосипед.');
             return;
         }
 
@@ -95,7 +95,7 @@ export function registerTakeSimCommand(
         // получаем доступные устройства
         const devices: MobilityDevice[] = await deviceRepo.getAvailableDevices(courier.warehouse_id, null);
         if (!devices.length) {
-            await bot.sendMessage(chatId, '❌ Нет доступных СИМ на вашем складе.');
+            await bot.sendMessage(chatId, '❌ Нет доступных Велосипедов на вашем складе.');
             return;
         }
 
@@ -159,7 +159,7 @@ export function registerTakeSimCommand(
 
         const state = stateManager.getUserState(telegramId);
         if (state !== DeviceSessionState.TAKE_DEVICE_SELECT) {
-            await bot.sendMessage(chatId, 'ℹ️ Сначала запустите выбор СИМ командой /take_sim.');
+            await bot.sendMessage(chatId, 'ℹ️ Сначала запустите выбор Велосипеда командой /take_sim.');
             return true;
         }
 

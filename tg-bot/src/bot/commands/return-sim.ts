@@ -134,7 +134,7 @@ export function registerReturnSimCommand(
         if (personal) {
             const result = await sessionService.endSession(telegramId, { type: 'ok' });
             if (result.success) {
-                await bot.sendMessage(chatId, '✅ Личный СИМ сдан, сессия завершена.', {
+                await bot.sendMessage(chatId, '✅ Личный Велосипед сдан, сессия завершена.', {
                     reply_markup: HIDE_REPLY_KEYBOARD
                 });
                 await sendIdleKeyboardIfEligible(chatId, telegramId);
@@ -147,7 +147,7 @@ export function registerReturnSimCommand(
         // Начинаем диалог
         await bot.sendMessage(
             chatId,
-            'Есть ли повреждение у СИМ?\n1. Нет\n2. Да',
+            'Есть ли повреждение у Велосипеда?\n1. Нет\n2. Да',
             { reply_markup: getReturnSimDamageQuestionInlineKeyboard() }
         );
 
@@ -206,7 +206,7 @@ export function registerReturnSimCommand(
             callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_YES
         ) {
             if (state !== DeviceSessionState.RETURN_ASK_DAMAGE) {
-                await bot.sendMessage(chatId, 'ℹ️ Сначала запустите сдачу СИМ командой /return_sim.');
+                await bot.sendMessage(chatId, 'ℹ️ Сначала запустите сдачу Велосипеда командой /return_sim.');
                 return true;
             }
 
@@ -219,7 +219,7 @@ export function registerReturnSimCommand(
         }
 
         if (state !== DeviceSessionState.RETURN_DAMAGE_TYPE) {
-            await bot.sendMessage(chatId, 'ℹ️ Сначала выберите, есть ли повреждение у СИМ.');
+            await bot.sendMessage(chatId, 'ℹ️ Сначала выберите, есть ли повреждение у Велосипеда.');
             return true;
         }
 

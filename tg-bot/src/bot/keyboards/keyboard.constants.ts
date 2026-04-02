@@ -7,9 +7,9 @@ export const KEYBOARD_BUTTON_TEXT = {
     WEAK: 'Слабое',
     CRITICAL: 'Критическое',
     SELECT_WAREHOUSE: '🏠 Выбрать склад',
-    TAKE_SIM: '🚲 Взять СИМ',
+    TAKE_SIM: '🚲 Взять Велосипед',
     CLEAR_WAREHOUSE: '❌🏠 Отвязаться от склада',
-    RETURN_SIM: '🚲❌ Сдать СИМ'
+    RETURN_SIM: '🚲❌ Сдать Велосипед'
 } as const;
 
 // Исторический текст кнопки выбора склада (без пробела)
