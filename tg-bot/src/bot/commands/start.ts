@@ -67,11 +67,11 @@ export function registerStartCommand(
             }
 
             // Курьер активен - приветствуем и показываем релевантную клавиатуру.
-            const greeting = `👋 С возвращением, ${courier.full_name}!\n\nДобро пожаловать в Мониторинг СИМ.`;
+            const greeting = `👋 С возвращением, ${courier.full_name}!\n\nДобро пожаловать в Мониторинг Велосипедов.`;
             const hasActiveSession = await sessionService.hasActiveSession(userId);
 
             if (hasActiveSession) {
-                await bot.sendMessage(chatId, `${greeting}\n\nУ вас активная сессия. Используйте кнопку ниже для сдачи СИМ:`, {
+                await bot.sendMessage(chatId, `${greeting}\n\nУ вас активная сессия. Используйте кнопку ниже для сдачи Велосипеда:`, {
                     reply_markup: getCourierActiveSessionKeyboard()
                 });
                 return;
