@@ -47,6 +47,8 @@ export async function initializeDatabase(): Promise<Pool> {
         throw new Error('❌ Отсутствуют обязательные параметры подключения к БД. Проверьте DB_USER, DB_PASSWORD, DB_NAME в .env файле');
     }
 
+    const poolMax = parseInt(process.env.DB_POOL_MAX || '10');
+
     // Создание пула соединений
     const newPool = new Pool({
         host,
@@ -54,6 +56,7 @@ export async function initializeDatabase(): Promise<Pool> {
         user,
         password,
         database,
+        max: poolMax,
         // Гарантируем UTC-часовой пояс на уровне сессии PostgreSQL,
         // чтобы NOW() / CURRENT_TIMESTAMP всегда записывали UTC.
         options: '-c timezone=UTC',
