@@ -38,11 +38,14 @@ export class MobilityDeviceRepository {
                         FROM mobility_devices md
                         WHERE md.is_active = true
                             AND (md.is_personal = true OR md.warehouse_id = $1)
-                            AND NOT EXISTS (
+                            AND (
+                                md.is_personal = true
+                                OR NOT EXISTS (
                                     SELECT 1
                                     FROM session s
                                     WHERE s.device_id = md.id
                                         AND s.is_active = true
+                                )
                             )
                         ORDER BY md.is_personal DESC, md.id;
         `;
