@@ -2,90 +2,25 @@
 
 import { Pool } from 'pg';
 import { getDatabase } from '../config/database';
+import {
+    ActiveSessionByCourierWithDeviceRecord,
+    ActiveSessionByDeviceRecord,
+    ActiveSessionByWarehouseRecord,
+    SessionHistoryByCourierRecord,
+    SessionHistoryByDeviceRecord,
+    SessionHistoryByWarehouseRecord,
+    SessionRecord
+} from './types/session.type';
 
-export interface SessionRecord {
-    id: number;
-    courier_id: number;
-    device_id: number;
-    warehouse_id: number;
-    start_date: Date;
-    end_date: Date | null;
-    sim_status_after: string | null;
-    status_comment: string | null;
-    is_active: boolean;
-}
-
-export interface ActiveSessionByDeviceRecord {
-    id: number;
-    courier_id: number;
-    device_id: number;
-    warehouse_id: number;
-    start_date: Date;
-    end_date: Date | null;
-    sim_status_after: string | null;
-    status_comment: string | null;
-    is_active: boolean;
-    courier_full_name: string;
-}
-
-export interface SessionHistoryByDeviceRecord {
-    start_date: Date;
-    end_date: Date | null;
-    sim_status_after: string | null;
-    status_comment: string | null;
-    is_active: boolean;
-    courier_full_name: string;
-    courier_nickname: string | null;
-}
-
-export interface ActiveSessionByCourierWithDeviceRecord {
-    id: number;
-    courier_id: number;
-    device_id: number;
-    warehouse_id: number;
-    start_date: Date;
-    end_date: Date | null;
-    sim_status_after: string | null;
-    status_comment: string | null;
-    is_active: boolean;
-    device_number: string;
-}
-
-export interface ActiveSessionByWarehouseRecord {
-    id: number;
-    courier_id: number;
-    device_id: number;
-    warehouse_id: number;
-    start_date: Date;
-    end_date: Date | null;
-    sim_status_after: string | null;
-    status_comment: string | null;
-    is_active: boolean;
-    courier_full_name: string;
-    courier_nickname: string | null;
-    device_number: string | null;
-    device_is_personal: boolean;
-}
-
-export interface SessionHistoryByWarehouseRecord {
-    id: number;
-    warehouse_id: number;
-    start_date: Date;
-    end_date: Date | null;
-    sim_status_after: string | null;
-    status_comment: string | null;
-    is_active: boolean;
-    courier_full_name: string;
-    courier_nickname: string | null;
-    device_number: string | null;
-    device_is_personal: boolean;
-}
-
-export interface SessionHistoryByCourierRecord {
-    start_date: Date;
-    end_date: Date | null;
-    device_number: string;
-}
+export type {
+    ActiveSessionByCourierWithDeviceRecord,
+    ActiveSessionByDeviceRecord,
+    ActiveSessionByWarehouseRecord,
+    SessionHistoryByCourierRecord,
+    SessionHistoryByDeviceRecord,
+    SessionHistoryByWarehouseRecord,
+    SessionRecord
+} from './types/session.type';
 
 export class SessionRepository {
     private db: Pool;
@@ -118,13 +53,23 @@ export class SessionRepository {
         return rows[0];
     }
 
-    public async closeSession(courierId: number, endDate: Date = new Date(), simStatusAfter?: string, statusComment?: string): Promise<void> {
+    public async closeSession(
+        courierId: number,
+        endDate: Date = new Date(),
+        simStatusAfter?: string,
+        statusComment?: string
+    ): Promise<void> {
         const query = `
             UPDATE session
             SET end_date = $1, sim_status_after = $2, status_comment = $3
             WHERE courier_id = $4 AND is_active = true
         `;
-        await this.db.query(query, [endDate.toISOString(), simStatusAfter || null, statusComment || null, courierId]);
+        await this.db.query(query, [
+            endDate.toISOString(),
+            simStatusAfter || null,
+            statusComment || null,
+            courierId
+        ]);
     }
 
     public async findById(id: number): Promise<SessionRecord | null> {
@@ -145,7 +90,6 @@ export class SessionRepository {
             ORDER BY s.start_date DESC, s.id DESC
             LIMIT 1
         `;
-
         const { rows } = await this.db.query<ActiveSessionByDeviceRecord>(query, [deviceId]);
         return rows[0] ?? null;
     }
@@ -158,7 +102,6 @@ export class SessionRepository {
               AND is_active = true
             LIMIT 1
         `;
-
         const result = await this.db.query<{ one: number }>(query, [deviceId]);
         return (result.rowCount ?? 0) > 0;
     }
@@ -178,7 +121,6 @@ export class SessionRepository {
             WHERE s.device_id = $1
             ORDER BY s.start_date DESC, s.id DESC
         `;
-
         const { rows } = await this.db.query<SessionHistoryByDeviceRecord>(query, [deviceId]);
         return rows;
     }
@@ -194,12 +136,13 @@ export class SessionRepository {
             ORDER BY end_date DESC NULLS LAST, id DESC
             LIMIT 1
         `;
-
         const { rows } = await this.db.query<{ status_comment: string }>(query, [deviceId]);
         return rows[0]?.status_comment ?? null;
     }
 
-    public async findActiveByCourierWithDevice(courierId: number): Promise<ActiveSessionByCourierWithDeviceRecord | null> {
+    public async findActiveByCourierWithDevice(
+        courierId: number
+    ): Promise<ActiveSessionByCourierWithDeviceRecord | null> {
         const query = `
             SELECT
                 s.*,
@@ -211,12 +154,16 @@ export class SessionRepository {
             ORDER BY s.start_date DESC, s.id DESC
             LIMIT 1
         `;
-
-        const { rows } = await this.db.query<ActiveSessionByCourierWithDeviceRecord>(query, [courierId]);
+        const { rows } = await this.db.query<ActiveSessionByCourierWithDeviceRecord>(
+            query,
+            [courierId]
+        );
         return rows[0] ?? null;
     }
 
-    public async findActiveByWarehouse(warehouseId: number): Promise<ActiveSessionByWarehouseRecord[]> {
+    public async findActiveByWarehouse(
+        warehouseId: number
+    ): Promise<ActiveSessionByWarehouseRecord[]> {
         const query = `
             SELECT
                 s.*,
@@ -231,7 +178,6 @@ export class SessionRepository {
               AND s.is_active = true
             ORDER BY c.full_name ASC, s.start_date DESC, s.id DESC
         `;
-
         const { rows } = await this.db.query<ActiveSessionByWarehouseRecord>(query, [warehouseId]);
         return rows;
     }
@@ -268,11 +214,13 @@ export class SessionRepository {
             startDateFromUtc.toISOString(),
             startDateToUtc.toISOString(),
         ]);
-
         return rows;
     }
 
-    public async getHistoryByCourier(courierId: number, limit?: number): Promise<SessionHistoryByCourierRecord[]> {
+    public async getHistoryByCourier(
+        courierId: number,
+        limit?: number
+    ): Promise<SessionHistoryByCourierRecord[]> {
         const hasLimit = typeof limit === 'number' && Number.isFinite(limit) && limit > 0;
 
         const query = hasLimit

@@ -3,77 +3,88 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { RegistrationHandler } from '../handlers/registration.handler';
 import { isCommand } from '../../constants/commands.constant';
+import { GENERIC_ERROR_MESSAGE } from '../../constants/messages.constant';
 import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
 
-/**
- * Middleware для проверки состояния регистрации пользователя.
- * 
- * Задачи:
- * 1. Проверяет, находится ли пользователь в процессе регистрации
- * 2. Если да И сообщение НЕ является командой - перенаправляет в registrationHandler
- * 3. Если да И сообщение является командой - пропускает к командам (команды имеют приоритет)
- * 4. Если нет - пропускает сообщение дальше к обработчикам команд
- */
+const MESSAGE_DEBOUNCE_MS = 800;
+
+type LastUserMessage = {
+    text: string;
+    timestampMs: number;
+};
+
+const lastUserMessageById = new Map<number, LastUserMessage>();
+
+function normalizeMessageText(text?: string): string | undefined {
+    if (!text) {
+        return undefined;
+    }
+
+    return convertKeyboardButtonToCommand(text);
+}
+
+function isDuplicateMessage(userId: number, text: string, nowMs: number): boolean {
+    const previous = lastUserMessageById.get(userId);
+    if (!previous) {
+        lastUserMessageById.set(userId, { text, timestampMs: nowMs });
+        return false;
+    }
+
+    const isSameText = previous.text === text;
+    const isInDebounceWindow = nowMs - previous.timestampMs <= MESSAGE_DEBOUNCE_MS;
+
+    lastUserMessageById.set(userId, { text, timestampMs: nowMs });
+    return isSameText && isInDebounceWindow;
+}
+
+/** Создает middleware регистрации с проверкой команд и защитой от дублей. */
 export function createRegistrationStateMiddleware(
+    bot: TelegramBot,
     registrationHandler: RegistrationHandler
 ) {
-    /**
-     * Простая функция-обработчик для bot.on('message').
-     * Она проверяет, находится ли пользователь в регистрации и
-     * если да — перенаправляет текст в registrationHandler.
-     * В случае команды или когда пользователь не в процессе,
-     * ничего не делает и позволяет другим слушателям сработать.
-     */
+    /** Обрабатывает входящее сообщение в контексте регистрации. */
     return async function registrationStateMiddleware(
         msg: TelegramBot.Message
     ) {
-        // Если нет from (служебные сообщения) - ничего не делаем
         if (!msg.from) {
             return;
         }
 
         const userId = msg.from.id;
-        let text = msg.text;
-
-        // Преобразуем текст кнопки клавиатуры в команду если нужно
-        if (text) {
-            text = convertKeyboardButtonToCommand(text);
-        }
-
-        // Проверяем, находится ли пользователь в процессе регистрации
+        const text = normalizeMessageText(msg.text);
         const isInRegistration = registrationHandler.isUserInRegistration(userId);
-
-        // Если пользователь не регистрируется - выходим
         if (!isInRegistration) {
             return;
         }
 
-        // Пользователь в процессе регистрации
-        // Если это команда — позволяем обработчикам команд выполнить свою логику
         if (text && isCommand(text)) {
-            console.log(`Команда ${text} от пользователя ${userId} пропущена к обработчикам (приоритет над регистрацией)`);
+            console.log(
+                `Команда ${text} от пользователя ${userId} ` +
+                'пропущена к обработчикам (приоритет над регистрацией)'
+            );
             return;
         }
 
-        // Не команда и пользователь регистрируется - обрабатываем в registrationHandler
-        await registrationHandler.handleMessage(msg);
+        if (text && isDuplicateMessage(userId, text, Date.now())) {
+            console.log(`Пропущено дублирующее сообщение от пользователя ${userId}`);
+            return;
+        }
+
+        try {
+            await registrationHandler.handleMessage(msg);
+        } catch (error) {
+            console.error('Ошибка middleware регистрации:', error);
+            await bot.sendMessage(msg.chat.id, GENERIC_ERROR_MESSAGE);
+        }
     };
 }
 
-/**
- * Вспомогательная функция для регистрации middleware в боте
- * 
- * @param bot - экземпляр Telegram бота
- * @param registrationHandler - обработчик регистрации
- */
+/** Регистрирует middleware регистрации для входящих сообщений. */
 export function setupRegistrationMiddleware(
     bot: TelegramBot,
     registrationHandler: RegistrationHandler
 ) {
-    // Создаем middleware функцию
-    const middleware = createRegistrationStateMiddleware(registrationHandler);
-
-    // Регистрируем её на все сообщения
+    const middleware = createRegistrationStateMiddleware(bot, registrationHandler);
     bot.on('message', middleware);
 
     console.log('✅ Middleware регистрации настроен');

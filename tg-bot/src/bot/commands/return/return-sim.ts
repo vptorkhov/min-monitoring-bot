@@ -1,52 +1,28 @@
 // src/bot/commands/return-sim.ts
 
 import TelegramBot from 'node-telegram-bot-api';
-import { CourierService } from '../../services/courier.service';
-import { SessionService, DamageType } from '../../services/session.service';
-import { CallbackQueryHandler } from '../callback-router';
-import { stateManager } from '../state-manager';
-import { DeviceSessionState } from '../../constants/states.constant';
-import { isCommand } from '../../constants/commands.constant';
+import { CourierService } from '../../../services/courier.service';
+import { SessionService, DamageType } from '../../../services/session.service';
+import { CallbackQueryHandler } from '../../callback-router';
+import { stateManager } from '../../state-manager';
+import { DeviceSessionState } from '../../../constants/states.constant';
+import { isCommand } from '../../../constants/commands.constant';
 import {
     getCourierIdleKeyboard,
     getReturnSimDamageQuestionKeyboard,
     getReturnSimDamageQuestionInlineKeyboard,
     getReturnSimDamageTypeInlineKeyboard,
     getReturnSimDamageTypeKeyboard
-} from '../keyboards';
-import { convertKeyboardButtonToCommand } from '../../utils/telegram.utils';
-import { sendCourierMainKeyboard } from '../keyboards/courier-main-keyboard';
-import { INLINE_CALLBACK_DATA } from '../keyboards';
-import { blockIfAdminGuestCommandNotAllowed } from '../admin/admin-mode';
+} from '../../keyboards';
+import { convertKeyboardButtonToCommand } from '../../../utils/telegram.utils';
+import { sendCourierMainKeyboard } from '../../keyboards/courier-main-keyboard';
+import { INLINE_CALLBACK_DATA } from '../../keyboards';
+import { blockIfAdminGuestCommandNotAllowed } from '../../admin/admin-mode';
+import { parseDamageType, parseYesNo } from './return-sim-parsers';
 
 const HIDE_REPLY_KEYBOARD: TelegramBot.ReplyKeyboardRemove = {
     remove_keyboard: true
 };
-
-// вспомогательные функции
-function normalizeAnswer(answer: string): string {
-    return answer.trim().toLowerCase();
-}
-
-/**
- * Проверка на "да"/"нет". Возвращает 'yes', 'no' или null.
- */
-function parseYesNo(answer: string): 'yes' | 'no' | null {
-    const norm = normalizeAnswer(answer);
-    if (/^\s*1\s*$/.test(answer) || norm === 'нет' || norm === 'no') return 'no';
-    if (/^\s*2\s*$/.test(answer) || norm === 'да' || norm === 'yes') return 'yes';
-    return null;
-}
-
-/**
- * Парсит выбор типа повреждения: 1 - слабое, 2 - критическое
- */
-function parseDamageType(answer: string): DamageType | null {
-    const norm = normalizeAnswer(answer);
-    if (/^\s*1\s*$/.test(answer) || norm === 'слабое' || norm === 'weak') return 'warning';
-    if (/^\s*2\s*$/.test(answer) || norm === 'критическое' || norm === 'critical') return 'broken';
-    return null;
-}
 
 export function registerReturnSimCommand(
     bot: TelegramBot,
@@ -210,10 +186,12 @@ export function registerReturnSimCommand(
                 return true;
             }
 
-            const answerText = callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_NO ? 'Нет' : 'Да';
+            const answerText =
+                callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_NO ? 'Нет' : 'Да';
             await bot.sendMessage(chatId, answerText);
 
-            const yn: 'yes' | 'no' = callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_NO ? 'no' : 'yes';
+            const yn: 'yes' | 'no' =
+                callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_NO ? 'no' : 'yes';
             await handleReturnAskDamageDecision(chatId, telegramId, yn);
             return true;
         }
@@ -223,10 +201,12 @@ export function registerReturnSimCommand(
             return true;
         }
 
-        const damageTypeText = callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_WEAK ? 'Слабое' : 'Критическое';
+        const damageTypeText =
+            callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_WEAK ? 'Слабое' : 'Критическое';
         await bot.sendMessage(chatId, damageTypeText);
 
-        const dtype: DamageType = callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_WEAK ? 'warning' : 'broken';
+        const dtype: DamageType =
+            callbackData === INLINE_CALLBACK_DATA.RETURN_DAMAGE_WEAK ? 'warning' : 'broken';
         await handleReturnDamageTypeDecision(chatId, telegramId, dtype);
         return true;
     });
@@ -285,7 +265,9 @@ export function registerReturnSimCommand(
             }
 
             case DeviceSessionState.RETURN_DESCRIPTION: {
-                const dtype = stateManager.getUserTempData<{ damageType?: DamageType }>(telegramId)?.damageType;
+                const dtype = stateManager
+                    .getUserTempData<{ damageType?: DamageType }>(telegramId)
+                    ?.damageType;
                 const comment = text.trim();
                 if (!dtype) {
                     // логическая ошибка; сбросим состояние

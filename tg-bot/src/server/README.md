@@ -37,5 +37,4 @@ Endpoint `/health` возвращает:
 
 - Мониторинга состояния приложения
 - Проверки доступности в оркестраторах
-- Автоматического перезапуска при сбоях</content>
-  <parameter name="filePath">d:\Vova\bots\min-monitoring-bot\tg-bot\src\server\README.md
+- Автоматического перезапуска при сбоях

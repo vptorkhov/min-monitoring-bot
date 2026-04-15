@@ -30,5 +30,4 @@
 - `DB_PORT` — порт сервера БД
 - `DB_USER` — имя пользователя БД
 - `DB_PASSWORD` — пароль пользователя БД
-- `DB_NAME` — имя базы данных</content>
-  <parameter name="filePath">d:\Vova\bots\min-monitoring-bot\tg-bot\src\config\README.md
+- `DB_NAME` — имя базы данных

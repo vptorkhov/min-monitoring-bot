@@ -9,11 +9,11 @@ import { registerSetWarehouseCommand } from './set-warehouse';
 import { registerClearWarehouseCommand } from './clear-warehouse';
 import { WarehouseService } from '../../services/warehouse.service';
 import { WarehouseRepository } from '../../repositories/warehouse.repository';
-import { registerCancelCommand } from './cancel';
+import { registerCancelCommand } from './cancel/cancel';
 import { SessionService } from '../../services/session.service';
 import { MobilityDeviceRepository } from '../../repositories/mobility-device.repository';
 import { registerTakeSimCommand } from './take-sim';
-import { registerReturnSimCommand } from './return-sim';
+import { registerReturnSimCommand } from './return/return-sim';
 import { createCallbackRouter } from '../callback-router';
 import { registerAdminModeCommands } from './admin';
 
