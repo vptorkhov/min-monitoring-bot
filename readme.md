@@ -378,6 +378,17 @@ docker run --env-file .env monitoring-bot
 # Telegram Bot Token (получить у @BotFather)
 BOT_TOKEN=your_bot_token_here
 
+# Режим получения апдейтов: polling | webhook
+BOT_UPDATE_MODE=polling
+
+# Webhook настройки (обязательны только если BOT_UPDATE_MODE=webhook)
+WEBHOOK_BASE_URL=https://your-app-name.user.amvera.io
+WEBHOOK_PATH=/webhook/telegram
+WEBHOOK_SECRET_TOKEN=your_secret_token_here
+
+# Опционально: удалять webhook при graceful shutdown
+WEBHOOK_DELETE_ON_SHUTDOWN=false
+
 # Порт HTTP сервера для health check
 PORT=3000
 
@@ -388,6 +399,18 @@ DB_NAME=mobility_db
 DB_USER=mobility_user
 DB_PASSWORD=mobility_password
 ```
+
+### Режимы запуска
+
+- Локально рекомендуется `BOT_UPDATE_MODE=polling`.
+- На хостинге (например, Amvera) рекомендуется `BOT_UPDATE_MODE=webhook`.
+
+### Минимальные требования для webhook на Amvera
+
+- Публичный HTTPS-домен приложения (бесплатный домен Amvera или свой).
+- Переменные/секреты в настройках приложения: `BOT_TOKEN`, `BOT_UPDATE_MODE=webhook`, `WEBHOOK_BASE_URL`, `WEBHOOK_PATH`, `WEBHOOK_SECRET_TOKEN`, а также `DB_*`.
+- После изменения переменных окружения требуется перезапуск контейнера.
+- При первичном переходе с polling на webhook очистите старый webhook в BotFather/Telegram API при необходимости.
 
 ## 🤖 Команды бота
 
